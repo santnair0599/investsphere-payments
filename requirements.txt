@@ -1,0 +1,9 @@
+# The reference data logic is pure-Python (stdlib only). The only runtime dep is
+# PyYAML, used by the deploy preflight (pipelines/validate_deployment.py) to parse
+# the Asset Bundle (databricks.yml) + bundle_vars.
+PyYAML>=6.0
+
+# Optional (production / docker-stack exploration):
+# pyspark>=3.5            # Spark counterparts run on the Databricks cluster
+# kafka-python>=2.0       # consume Debezium topics from the docker stack
+# requests>=2.31          # REST API ingestion against WireMock

@@ -1,0 +1,25 @@
+name: investsphere_payments
+version: "1.0.0"
+config-version: 2
+
+profile: investsphere_payments
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+# Gold runs on a Databricks SQL warehouse against the trusted Silver tables.
+# +catalog makes every model WRITE into the per-env Unity Catalog catalog
+# (investsphere_dev/test/prod), supplied as a dbt var from the bundle command.
+models:
+  investsphere_payments:
+    +catalog: "{{ var('catalog', 'investsphere_dev') }}"
+    staging:
+      +materialized: view
+      +schema: gold_staging
+    gold:
+      +materialized: table
+      +schema: gold
+    gold_marts:
+      +materialized: table
+      +schema: gold_marts

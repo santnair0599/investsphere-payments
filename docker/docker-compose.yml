@@ -1,0 +1,73 @@
+# Local source stack for the Payments platform — lets you exercise the connectors
+# offline (no Azure / Oracle / Salesforce needed):
+#
+#   CDC      : postgres -> debezium connect -> kafka  (customer changes)
+#   ADLS     : minio (S3-compatible object storage stand-in for ADLS)
+#   SFTP     : atmoz/sftp (vendor file feed)
+#   REST API : wiremock (stubbed API responses)
+#
+#   docker compose -f docker/docker-compose.yml up -d
+#   # register the Debezium connector:
+#   curl -i -X POST -H "Content-Type: application/json" \
+#        --data @docker/debezium/register-customer.json \
+#        http://localhost:8083/connectors
+#
+# This stack is for realistic local exploration; the unit tests do NOT need it.
+services:
+
+  postgres:
+    image: debezium/postgres:16
+    environment:
+      POSTGRES_USER: payments
+      POSTGRES_PASSWORD: payments
+      POSTGRES_DB: payments
+    command: ["postgres", "-c", "wal_level=logical"]
+    ports: ["5432:5432"]
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    depends_on: [zookeeper]
+    ports: ["9092:9092"]
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  connect:
+    image: debezium/connect:2.7
+    depends_on: [kafka, postgres]
+    ports: ["8083:8083"]
+    environment:
+      BOOTSTRAP_SERVERS: kafka:29092
+      GROUP_ID: payments-connect
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      STATUS_STORAGE_TOPIC: connect_statuses
+
+  minio:                       # ADLS / object-storage stand-in (S3 API)
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports: ["9000:9000", "9001:9001"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+
+  sftp:                        # vendor file feed
+    image: atmoz/sftp:latest
+    ports: ["2222:22"]
+    command: vendor:vendorpass:::upload
+
+  wiremock:                    # REST API source
+    image: wiremock/wiremock:3.6.0
+    ports: ["8089:8080"]
+    volumes:
+      - ./wiremock:/home/wiremock

@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/api/v1/customers"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "page": 1,
+      "page_size": 2,
+      "total": 2,
+      "data": [
+        {"customer_id": "201", "customer_name": "Vendor One", "email": "v1@x.com", "status": "active", "updated_at": "2026-06-30T10:00:00Z"},
+        {"customer_id": "202", "customer_name": "Vendor Two", "email": "v2@x.com", "status": "inactive", "updated_at": "2026-06-30T10:05:00Z"}
+      ]
+    }
+  }
+}

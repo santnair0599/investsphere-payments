@@ -1,0 +1,25 @@
+[
+  {"source_system": "oracle", "source_table": "customers",
+   "target_bronze_table": "bronze.oracle_customers",
+   "primary_key": "customer_id", "watermark_column": "last_updated_date",
+   "load_type": "incremental", "enabled": true},
+
+  {"source_system": "oracle", "source_table": "transactions",
+   "target_bronze_table": "bronze.oracle_transactions",
+   "primary_key": "transaction_id", "watermark_column": "last_updated_date",
+   "load_type": "incremental", "enabled": true,
+   "_comment": "large table: tuned fetchsize + bounded parallel read on the numeric PK",
+   "fetchsize": 20000,
+   "partition_column": "transaction_id", "num_partitions": 8,
+   "lower_bound": 1, "upper_bound": 10000000},
+
+  {"source_system": "sqlserver", "source_table": "accounts",
+   "target_bronze_table": "bronze.sqlserver_accounts",
+   "primary_key": "account_id", "watermark_column": "modified_at",
+   "load_type": "full", "enabled": true},
+
+  {"source_system": "sqlserver", "source_table": "legacy_audit",
+   "target_bronze_table": "bronze.sqlserver_legacy_audit",
+   "primary_key": "id", "watermark_column": "modified_at",
+   "load_type": "incremental", "enabled": false}
+]

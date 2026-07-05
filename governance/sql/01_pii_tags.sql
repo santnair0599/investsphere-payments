@@ -1,0 +1,19 @@
+-- PII classification tags on columns (Unity Catalog tags).
+ALTER TABLE investsphere.silver_cdc.customer_scd2 ALTER COLUMN customer_name SET TAGS ('pii' = 'true', 'classification' = 'name');
+ALTER TABLE investsphere.silver_cdc.customer_scd2 ALTER COLUMN email SET TAGS ('pii' = 'true', 'classification' = 'email');
+ALTER TABLE investsphere.silver_cdc.customer_scd2 ALTER COLUMN phone_number SET TAGS ('pii' = 'true', 'classification' = 'phone');
+ALTER TABLE investsphere.silver_cdc.customer_scd2 ALTER COLUMN national_id SET TAGS ('pii' = 'true', 'classification' = 'national_id');
+ALTER TABLE investsphere.silver_cdc.customer_scd2 ALTER COLUMN passport_number SET TAGS ('pii' = 'true', 'classification' = 'passport');
+ALTER TABLE investsphere.silver_cdc.customer_scd2 ALTER COLUMN emirates_id SET TAGS ('pii' = 'true', 'classification' = 'national_id');
+ALTER TABLE investsphere.gold.dim_customer ALTER COLUMN customer_name SET TAGS ('pii' = 'true', 'classification' = 'name');
+ALTER TABLE investsphere.gold.dim_customer ALTER COLUMN email SET TAGS ('pii' = 'true', 'classification' = 'email');
+ALTER TABLE investsphere.gold.dim_customer ALTER COLUMN phone_number SET TAGS ('pii' = 'true', 'classification' = 'phone');
+ALTER TABLE investsphere.gold.dim_customer ALTER COLUMN national_id SET TAGS ('pii' = 'true', 'classification' = 'national_id');
+ALTER TABLE investsphere.gold.dim_customer ALTER COLUMN passport_number SET TAGS ('pii' = 'true', 'classification' = 'passport');
+ALTER TABLE investsphere.gold.dim_customer ALTER COLUMN emirates_id SET TAGS ('pii' = 'true', 'classification' = 'national_id');
+ALTER TABLE investsphere.gold.dim_customer_history ALTER COLUMN customer_name SET TAGS ('pii' = 'true', 'classification' = 'name');
+ALTER TABLE investsphere.gold.dim_customer_history ALTER COLUMN email SET TAGS ('pii' = 'true', 'classification' = 'email');
+ALTER TABLE investsphere.gold.dim_customer_history ALTER COLUMN phone_number SET TAGS ('pii' = 'true', 'classification' = 'phone');
+ALTER TABLE investsphere.gold.dim_customer_history ALTER COLUMN national_id SET TAGS ('pii' = 'true', 'classification' = 'national_id');
+ALTER TABLE investsphere.gold.dim_customer_history ALTER COLUMN passport_number SET TAGS ('pii' = 'true', 'classification' = 'passport');
+ALTER TABLE investsphere.gold.dim_customer_history ALTER COLUMN emirates_id SET TAGS ('pii' = 'true', 'classification' = 'national_id');

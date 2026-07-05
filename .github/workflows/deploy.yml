@@ -1,0 +1,53 @@
+# Asset Bundle deployment — manual, environment-gated.
+#
+# Triggered by hand (workflow_dispatch). `validate` runs first; `deploy` is gated
+# behind a GitHub Environment so PROD requires a human approval (configure
+# required reviewers on the `prod` environment in repo settings). `apply` of
+# Terraform is a separate, earlier step (see terraform.yml) — this workflow only
+# deploys the bundle on top of an already-provisioned environment.
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Bundle target to deploy"
+        type: choice
+        options: [dev, test, prod]
+        default: dev
+      run_after_deploy:
+        description: "Run the smoke-test job after deploy"
+        type: boolean
+        default: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r requirements.txt
+      - name: Deploy preflight (secret names + service principal; no values)
+        run: python pipelines/validate_deployment.py
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    # PROD requires manual approval via the GitHub Environment's protection rules.
+    environment: ${{ inputs.target }}
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      BUNDLE_VAR_warehouse_id: ${{ secrets.WAREHOUSE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Databricks CLI
+        run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+      - name: Validate (target)
+        run: databricks bundle validate -t ${{ inputs.target }}
+      - name: Deploy (target)
+        run: databricks bundle deploy -t ${{ inputs.target }}
+      - name: Smoke test (optional)
+        if: ${{ inputs.run_after_deploy }}
+        run: databricks bundle run investsphere_payments_smoke -t ${{ inputs.target }}

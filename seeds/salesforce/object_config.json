@@ -1,0 +1,32 @@
+[
+  {
+    "source_system": "salesforce",
+    "source_object": "Account",
+    "target_bronze_table": "bronze.sfdc_account",
+    "primary_key": "Id",
+    "watermark_column": "SystemModstamp",
+    "load_type": "incremental",
+    "include_deleted": true,
+    "enabled": true
+  },
+  {
+    "source_system": "salesforce",
+    "source_object": "Contact",
+    "target_bronze_table": "bronze.sfdc_contact",
+    "primary_key": "Id",
+    "watermark_column": "LastModifiedDate",
+    "load_type": "incremental",
+    "include_deleted": true,
+    "enabled": true
+  },
+  {
+    "source_system": "salesforce",
+    "source_object": "Opportunity",
+    "target_bronze_table": "bronze.sfdc_opportunity",
+    "primary_key": "Id",
+    "watermark_column": "SystemModstamp",
+    "load_type": "incremental",
+    "include_deleted": true,
+    "enabled": true
+  }
+]

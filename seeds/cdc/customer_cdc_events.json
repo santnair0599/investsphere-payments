@@ -1,0 +1,34 @@
+[
+  {"op": "c", "ts_ms": 1719700000000, "before": null,
+   "after": {"id": 101, "name": "Santosh Nair", "email": "old@x.com", "phone": "111", "country": "UAE", "status": "ACTIVE"},
+   "source": {"lsn": 10, "ts_ms": 1719700000000, "table": "customer"}},
+
+  {"op": "c", "ts_ms": 1719700100000, "before": null,
+   "after": {"id": 102, "name": "Asha Rao", "email": "asha@x.com", "phone": "222", "country": "IN", "status": "ACTIVE"},
+   "source": {"lsn": 15, "ts_ms": 1719700100000, "table": "customer"}},
+
+  {"op": "u", "ts_ms": 1719700200000,
+   "before": {"id": 101, "name": "Santosh Nair", "email": "old@x.com", "phone": "111", "country": "UAE", "status": "ACTIVE"},
+   "after": {"id": 101, "name": "Santosh Nair", "email": "new@x.com", "phone": "111", "country": "UAE", "status": "ACTIVE"},
+   "source": {"lsn": 20, "ts_ms": 1719700200000, "table": "customer"}},
+
+  {"op": "u", "ts_ms": 1719700200000,
+   "before": {"id": 101, "name": "Santosh Nair", "email": "old@x.com", "phone": "111", "country": "UAE", "status": "ACTIVE"},
+   "after": {"id": 101, "name": "Santosh Nair", "email": "new@x.com", "phone": "111", "country": "UAE", "status": "ACTIVE"},
+   "source": {"lsn": 20, "ts_ms": 1719700200000, "table": "customer"}},
+
+  {"op": "u", "ts_ms": 1719700300000,
+   "before": {"id": 101, "name": "Santosh Nair", "email": "new@x.com", "phone": "111", "country": "UAE", "status": "ACTIVE"},
+   "after": {"id": 101, "name": "Santosh Nair", "email": "new@x.com", "phone": "111", "country": "UAE", "status": "ACTIVE"},
+   "source": {"lsn": 25, "ts_ms": 1719700300000, "table": "customer"}},
+
+  {"op": "u", "ts_ms": 1719699000000,
+   "before": {"id": 101, "name": "Santosh Nair", "email": "old@x.com", "phone": "111", "country": "UAE", "status": "ACTIVE"},
+   "after": {"id": 101, "name": "STALE OUT OF ORDER", "email": "stale@x.com", "phone": "000", "country": "UAE", "status": "ACTIVE"},
+   "source": {"lsn": 5, "ts_ms": 1719699000000, "table": "customer"}},
+
+  {"op": "d", "ts_ms": 1719700400000,
+   "before": {"id": 102, "name": "Asha Rao", "email": "asha@x.com", "phone": "222", "country": "IN", "status": "ACTIVE"},
+   "after": null,
+   "source": {"lsn": 30, "ts_ms": 1719700400000, "table": "customer"}}
+]

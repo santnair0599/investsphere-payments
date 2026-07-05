@@ -1,0 +1,15 @@
+{
+  "name": "customer-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "payments",
+    "database.password": "payments",
+    "database.dbname": "payments",
+    "topic.prefix": "payments",
+    "table.include.list": "public.customer",
+    "plugin.name": "pgoutput",
+    "snapshot.mode": "initial"
+  }
+}

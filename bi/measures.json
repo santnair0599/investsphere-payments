@@ -1,0 +1,110 @@
+{
+  "measures": [
+    {
+      "name": "total_payment_amount",
+      "dataset": "payments_daily",
+      "column": "total_amount",
+      "agg": "SUM",
+      "format": "currency",
+      "description": "Total payment value."
+    },
+    {
+      "name": "payment_count",
+      "dataset": "payments_daily",
+      "column": "payment_count",
+      "agg": "SUM",
+      "format": "integer",
+      "description": "Number of payments."
+    },
+    {
+      "name": "avg_payment_amount",
+      "dataset": "payments_fact",
+      "column": "amount",
+      "agg": "AVG",
+      "format": "currency",
+      "description": "Average payment value."
+    },
+    {
+      "name": "active_customers",
+      "dataset": "payments_fact",
+      "column": "customer_id",
+      "agg": "DISTINCT_COUNT",
+      "format": "integer",
+      "description": "Distinct paying customers."
+    },
+    {
+      "name": "distinct_currencies",
+      "dataset": "payments_daily",
+      "column": "currency_code",
+      "agg": "DISTINCT_COUNT",
+      "format": "integer",
+      "description": "Currencies transacted."
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "transaction_date",
+      "dataset": "payments_daily",
+      "column": "transaction_date",
+      "type": "date"
+    },
+    {
+      "name": "currency",
+      "dataset": "payments_daily",
+      "column": "currency_code",
+      "type": "text"
+    },
+    {
+      "name": "payment_type",
+      "dataset": "payments_daily",
+      "column": "payment_type",
+      "type": "text"
+    },
+    {
+      "name": "customer_country",
+      "dataset": "payments_daily",
+      "column": "customer_country",
+      "type": "text"
+    },
+    {
+      "name": "customer_status",
+      "dataset": "customer_dim",
+      "column": "status",
+      "type": "text"
+    }
+  ],
+  "datasets": [
+    {
+      "name": "payments_daily",
+      "view": "gold_marts.v_payments_daily_bi",
+      "source": "gold_marts.daily_payment_summary",
+      "rls_column": "customer_country"
+    },
+    {
+      "name": "payments_fact",
+      "view": "gold_marts.v_payments_fact_bi",
+      "source": "gold.fact_payments",
+      "rls_column": "customer_country"
+    },
+    {
+      "name": "customer_dim",
+      "view": "gold_marts.v_customer_bi",
+      "source": "gold_masked.v_customer_masked_for_analytics",
+      "rls_column": "nationality"
+    }
+  ],
+  "rls": {
+    "strategy": "unity_catalog_row_filter",
+    "region_columns": [
+      "customer_country",
+      "nationality"
+    ],
+    "scoped_group": "analysts",
+    "global_groups": [
+      "pii_approved_users",
+      "data_stewards",
+      "spn_investsphere_etl"
+    ],
+    "description": "Analysts are region-filtered by Unity Catalog; Power BI DirectQuery inherits it. Optional Power BI RLS roles can mirror the same region column for Import mode."
+  }
+}

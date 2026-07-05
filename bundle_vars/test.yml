@@ -1,0 +1,18 @@
+# Bundle variable values for target: test
+#
+# Fill from:  terraform -chdir=infra/terraform/envs/test output -json
+#
+#   terraform output       ->  bundle var
+#   catalog_name           ->  catalog
+#   warehouse_id           ->  warehouse_id
+#   secret_scope_name      ->  secret_scope
+#   etl_service_principal  ->  etl_service_principal   (job run-as)
+catalog: investsphere_test
+secret_scope: investsphere_payments
+etl_service_principal: spn_investsphere_etl
+warehouse_id: ""            # REQUIRED before deploy: terraform output -raw warehouse_id
+
+# --- reference context (NOT bundle vars) ---
+# storage_account:       stinvestpaymentstest
+# external_location_url: abfss://gold@stinvestpaymentstest.dfs.core.windows.net/
+# resource_group:        rg-investsphere-payments-test

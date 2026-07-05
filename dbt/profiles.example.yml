@@ -1,0 +1,21 @@
+# dbt connection profile — EXAMPLE (safe to commit; no secrets here).
+#
+# Copy this to your dbt profiles location and fill host / http_path:
+#   Windows:  C:\Users\<you>\.dbt\profiles.yml
+#   (or keep it in ./dbt and run with:  dbt <cmd> --profiles-dir .)
+#
+# The profile name MUST match dbt_project.yml -> `profile: investsphere_payments`.
+# Do NOT hardcode the token — set an env var instead:
+#   PowerShell:  $env:DATABRICKS_TOKEN = "<your PAT>"
+
+investsphere_payments:
+  target: dev
+  outputs:
+    dev:
+      type: databricks
+      host: adb-7405615245673169.9.azuredatabricks.net     # your workspace host (no https://)
+      http_path: /sql/1.0/warehouses/2eb48546973d1621      # SQL Warehouse -> Connection details -> HTTP path
+      token: "{{ env_var('DATABRICKS_TOKEN') }}"           # set the env var; never commit a real token
+      catalog: investsphere_dev                            # Unity Catalog
+      schema: gold                                         # default schema (models override via +schema)
+      threads: 4

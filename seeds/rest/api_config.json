@@ -1,0 +1,28 @@
+[
+  {
+    "source_system": "partner_api",
+    "api_name": "fx_rates_api",
+    "endpoint": "/v1/fx/rates",
+    "target_bronze_table": "bronze.rest_fx_rates",
+    "primary_key": "rate_id",
+    "load_type": "incremental",
+    "enabled": true,
+    "request_params": {"base": "AED"},
+    "auth": {"scheme": "Bearer", "secret_name": "rest_api_token"},
+    "pagination": {"type": "page", "page_param": "page", "size": 2},
+    "watermark": {"param": "updated_since", "field": "updated_at"}
+  },
+  {
+    "source_system": "partner_api",
+    "api_name": "merchant_api",
+    "endpoint": "/v1/merchants",
+    "target_bronze_table": "bronze.rest_merchants",
+    "primary_key": "merchant_id",
+    "load_type": "incremental",
+    "enabled": true,
+    "request_params": {},
+    "auth": {"scheme": "Bearer", "secret_name": "rest_api_token"},
+    "pagination": {"type": "cursor", "cursor_param": "cursor"},
+    "watermark": {"param": "updated_since", "field": "updated_at"}
+  }
+]

@@ -1,0 +1,11 @@
+[
+  {
+    "source_system": "card_scheme_vendor",
+    "file_pattern": "settlement_(?P<date>\\d{4}-\\d{2}-\\d{2})\\.csv",
+    "business_columns": ["settlement_id", "merchant_id", "amount", "currency",
+                         "settlement_date"],
+    "target_bronze_table": "bronze.sftp_settlements",
+    "source_dir": "sftp://card-vendor/incoming",
+    "enabled": true
+  }
+]

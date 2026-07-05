@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: dim_customer
+    description: "Current customer dimension."
+    columns:
+      - name: customer_id
+        description: "Business key."
+        data_tests: [not_null, unique]
+      - name: status
+        data_tests:
+          - accepted_values:
+              values: ["ACTIVE", "INACTIVE", "CLOSED", "SUSPENDED"]
+
+  - name: fact_payments
+    description: "Payment events."
+    columns:
+      - name: payment_id
+        data_tests: [not_null, unique]
+      - name: customer_id
+        # FK to the full customer master (dim_customer_history), NOT dim_customer:
+        # a payment can predate a soft-delete, so it must still resolve to a known
+        # customer even though the current dimension excludes deleted customers.
+        description: "FK to the customer master (current or historical)."
+        data_tests:
+          - relationships:
+              to: ref('dim_customer_history')
+              field: customer_id
+      - name: currency_code
+        data_tests:
+          - accepted_values:
+              values: ["AED", "USD", "EUR", "GBP", "INR", "SAR"]
+
+  - name: dim_customer_history
+    description: "SCD2 customer history."
+    columns:
+      - name: customer_id
+        data_tests: [not_null]

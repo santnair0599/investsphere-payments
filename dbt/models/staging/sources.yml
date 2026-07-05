@@ -1,0 +1,16 @@
+version: 2
+
+# Trusted Silver tables (written by the Spark Silver jobs) are dbt's sources.
+sources:
+  - name: silver_clean
+    catalog: "{{ var('catalog', 'investsphere_dev') }}"
+    schema: silver_clean
+    tables:
+      - name: payment_clean
+        description: "Conformed, DQ-passed payments (one row per payment_id)."
+  - name: silver_cdc
+    catalog: "{{ var('catalog', 'investsphere_dev') }}"
+    schema: silver_cdc
+    tables:
+      - name: customer_scd2
+        description: "Customer SCD2 history (effective_from/to, is_current, is_deleted)."

@@ -1,0 +1,91 @@
+# Terraform CI for the platform foundation (infra/terraform/).
+#
+# fmt + validate run on every PR with no cloud creds (validate uses -backend=false
+# so it needs no remote state). `plan` is a manual, environment-gated job: it
+# requires Azure + Databricks credentials and approval, and is the gate promotion
+# flows through (dev -> test -> prod). `apply` is intentionally NOT automated here.
+name: terraform
+
+on:
+  pull_request:
+    paths: ["infra/terraform/**"]
+  push:
+    branches: [main]
+    paths: ["infra/terraform/**"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to plan"
+        type: choice
+        options: [dev, test, prod]
+        default: dev
+
+env:
+  TF_VERSION: "1.9.5"
+
+jobs:
+  # ---- static checks: no credentials required -----------------------------
+  fmt-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform fmt (check, recursive)
+        run: terraform -chdir=infra/terraform fmt -check -recursive -diff
+
+      - name: terraform validate (every env, no backend)
+        run: |
+          set -euo pipefail
+          for env in dev test prod; do
+            echo "::group::validate $env"
+            terraform -chdir="infra/terraform/envs/$env" init -backend=false -input=false
+            terraform -chdir="infra/terraform/envs/$env" validate
+            echo "::endgroup::"
+          done
+
+      - name: Generated grants drift check
+        run: |
+          pip install -r requirements.txt
+          python pipelines/generate_terraform_grants.py   # fail if generator errors
+          git diff --exit-code infra/terraform/generated   # generated files must be committed & current
+
+  # ---- plan: credentialed, environment-gated promotion gate ---------------
+  plan:
+    needs: fmt-validate
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}   # GitHub Environment protection rules gate prod
+    permissions:
+      id-token: write   # OIDC federation to Azure (no stored client secret)
+      contents: read
+    env:
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # Remote-state storage details come from a per-env backend config (not
+      # committed). Provide them as secrets / a backend.hcl in CI.
+      - name: terraform init
+        run: |
+          terraform -chdir="infra/terraform/envs/${{ inputs.environment }}" init -input=false \
+            -backend-config="resource_group_name=${{ secrets.TFSTATE_RG }}" \
+            -backend-config="storage_account_name=${{ secrets.TFSTATE_SA }}" \
+            -backend-config="container_name=tfstate"
+
+      - name: terraform plan
+        run: |
+          terraform -chdir="infra/terraform/envs/${{ inputs.environment }}" plan -input=false -out tfplan
+
+      # apply is a separate, manually-approved step in real promotion:
+      # terraform -chdir="infra/terraform/envs/${{ inputs.environment }}" apply tfplan

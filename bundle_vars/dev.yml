@@ -1,0 +1,23 @@
+# Bundle variable values for target: dev
+#
+# Fill the blanks from Terraform AFTER `terraform apply` of envs/dev:
+#     terraform -chdir=infra/terraform/envs/dev output -json
+#
+#   terraform output       ->  bundle var (databricks.yml `variables:`)
+#   ---------------------------------------------------------------
+#   catalog_name           ->  catalog
+#   warehouse_id           ->  warehouse_id
+#   secret_scope_name      ->  secret_scope
+#   etl_service_principal  ->  etl_service_principal   (job run-as in test/prod)
+#
+# scripts/deploy_bundle.sh reads these keys and passes them as `--var key=value`.
+catalog: investsphere_dev
+secret_scope: investsphere_payments
+etl_service_principal: spn_investsphere_etl
+warehouse_id: 2eb48546973d1621            # REQUIRED before deploy: terraform output -raw warehouse_id
+
+# --- reference context (NOT bundle vars; used by the deployment runbook) ---
+# storage_account:       stinvestpaymentsdev
+# external_location_url: abfss://gold@stinvestpaymentsdev.dfs.core.windows.net/
+# access_connector_id:   <terraform output access_connector_id>
+# resource_group:        rg-investsphere-payments-dev

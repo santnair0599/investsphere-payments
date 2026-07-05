@@ -1,0 +1,353 @@
+# Declarative Automation Bundle (Databricks Asset Bundles) for the Payments
+# platform.
+#
+#   databricks bundle validate -t dev
+#   databricks bundle deploy   -t dev
+#
+# Jobs:
+#   investsphere_payments_daily_e2e  -> the full production DAG
+#   investsphere_payments_smoke      -> credential-free deployment smoke test
+#
+# The daily_e2e graph mirrors src/payments_platform/orchestration/dag.py 1:1.
+# Per-task Python uses pipelines/dag_task.py; gates set a task VALUE that a
+# condition task branches on. See docs/ORCHESTRATION.md.
+bundle:
+  name: investsphere_payments
+
+# ---------------------------------------------------------------------------
+# Library on the job compute.
+# Out of the box, pipelines/dag_task.py inserts ./src onto sys.path and the
+# bundle syncs the whole repo, so `import payments_platform...` resolves with no
+# extra config — good enough to get the first run working.
+#
+# PRODUCTION-CORRECT (recommended once the path works): install the package as a
+# wheel. Uncomment the block below AND add `dependencies` to each job's serverless
+# environment spec (SERVERLESS uses environments.dependencies, NOT task libraries):
+#
+#   artifacts:
+#     default:
+#       type: whl
+#       build: python -m build --wheel      # needs: pip install build
+#       path: .
+#
+#   # then in each job:
+#   environments:
+#     - environment_key: default
+#       spec:
+#         client: "2"
+#         dependencies: ["dist/*.whl"]
+# ---------------------------------------------------------------------------
+
+variables:
+  # Per-target values are filled from Terraform outputs (see bundle_vars/<env>.yml
+  # and docs/DATABRICKS_DEPLOYMENT.md). Defaults keep `bundle validate` working
+  # without a workspace; real deploys override via --var / bundle_vars.
+  catalog: { default: investsphere }          # tf output: catalog_name
+  # Secret scope (Azure Key Vault-backed in prod): JDBC/Kafka/API creds, tokens.
+  secret_scope: { default: investsphere_payments }   # tf output: secret_scope_name
+  warehouse_id: { default: 2eb48546973d1621 }               # tf output: warehouse_id (dbt SQL warehouse)
+  etl_service_principal:                       # tf output: etl_service_principal
+    description: >-
+      ETL service principal that runs the job in test/prod (maps to the
+      Unity Catalog group spn_investsphere_etl). Set to the SPN application id.
+    default: spn_investsphere_etl
+  oncall_email: { default: "santnair0599@gmail.com" }
+
+# dev runs as the deploying user (development mode); test/prod run as the ETL
+# service principal — the only identity that writes Bronze/Silver base tables.
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      catalog: investsphere_dev
+      secret_scope: investsphere_payments
+      # warehouse_id: set via bundle_vars/dev.yml -> --var (from terraform output)
+
+  test:
+    mode: production
+    run_as:
+      service_principal_name: "${var.etl_service_principal}"
+    variables:
+      catalog: investsphere_test
+      secret_scope: investsphere_payments
+
+  prod:
+    mode: production
+    run_as:
+      service_principal_name: "${var.etl_service_principal}"
+    variables:
+      catalog: investsphere_prod
+      secret_scope: investsphere_payments
+
+_notify: &notify
+  on_failure: ["${var.oncall_email}"]
+  on_duration_warning_threshold_exceeded: ["${var.oncall_email}"]
+
+_health: &health
+  rules:
+    - { metric: RUN_DURATION_SECONDS, op: GREATER_THAN, value: 3600 }
+
+_retry: &retry
+  max_retries: 2
+  min_retry_interval_millis: 60000
+  retry_on_timeout: true
+
+resources:
+  jobs:
+
+    # ======================================================================
+    # FULL PRODUCTION DAG
+    #   init -> [bronze x3 parallel] -> bronze gate -> [silver x2] ->
+    #   silver DQ gate -> dbt build -> dbt test -> governance -> publish
+    #   (+ write_status runs ALL_DONE for monitoring/control)
+    # ======================================================================
+    investsphere_payments_daily_e2e:
+      name: investsphere_payments_daily_e2e
+      tags: { project: investsphere_payments, cadence: daily }
+      timeout_seconds: 7200
+      max_concurrent_runs: 1
+      email_notifications: *notify
+      health: *health
+      schedule:
+        quartz_cron_expression: "0 0 18 * * ?"   # 18:00 daily
+        timezone_id: Asia/Dubai
+      parameters:
+        - { name: env, default: dev }
+        - { name: catalog, default: "${var.catalog}" }
+        - { name: run_date, default: "2026-06-30" }
+        - { name: run_id, default: "{{job.run_id}}" }
+        - { name: load_mode, default: incremental }     # incremental | full | backfill
+        - { name: backfill_start_date, default: "" }
+        - { name: backfill_end_date, default: "" }
+        - { name: secret_scope, default: "${var.secret_scope}" }
+      environments:
+        - environment_key: default
+          spec: { client: "2" }
+
+      tasks:
+        # ---- init ----
+        - task_key: init_run
+          environment_key: default
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "init_run",
+                         "--env", "{{job.parameters.env}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--run_date", "{{job.parameters.run_date}}",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--load_mode", "{{job.parameters.load_mode}}"]
+
+        # ---- Bronze (parallel) ----
+        - task_key: bronze_payments_file
+          environment_key: default
+          depends_on: [{ task_key: init_run }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "bronze_payments_file",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--load_mode", "{{job.parameters.load_mode}}"]
+
+        - task_key: bronze_jdbc
+          environment_key: default
+          depends_on: [{ task_key: init_run }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            # JDBC ingestor receives backfill window when load_mode=backfill
+            parameters: ["--task", "bronze_jdbc",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--load_mode", "{{job.parameters.load_mode}}",
+                         "--backfill_start_date", "{{job.parameters.backfill_start_date}}",
+                         "--backfill_end_date", "{{job.parameters.backfill_end_date}}"]
+
+        - task_key: bronze_customer_cdc
+          environment_key: default
+          depends_on: [{ task_key: init_run }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "bronze_customer_cdc",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--load_mode", "{{job.parameters.load_mode}}"]
+
+        # ---- additional sources (active; fan out in parallel with the above) ----
+        # These are intentionally NOT dependencies of bronze_validation_gate, so a
+        # failure here does not block the gate unless added to its required_sources.
+        - task_key: bronze_rest_api
+          environment_key: default
+          depends_on: [{ task_key: init_run }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "bronze_rest_api",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--load_mode", "{{job.parameters.load_mode}}"]
+
+        - task_key: bronze_sftp
+          environment_key: default
+          depends_on: [{ task_key: init_run }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "bronze_sftp",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--run_date", "{{job.parameters.run_date}}"]
+
+        - task_key: bronze_salesforce
+          environment_key: default
+          depends_on: [{ task_key: init_run }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "bronze_salesforce",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--load_mode", "{{job.parameters.load_mode}}"]
+
+        # ---- Bronze validation gate ----
+        - task_key: bronze_validation_gate
+          environment_key: default
+          depends_on:
+            - { task_key: bronze_payments_file }
+            - { task_key: bronze_jdbc }
+            - { task_key: bronze_customer_cdc }
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "bronze_validation_gate",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
+        - task_key: bronze_gate_check
+          depends_on: [{ task_key: bronze_validation_gate }]
+          condition_task:
+            op: EQUAL_TO
+            left: "{{tasks.bronze_validation_gate.values.gate_passed}}"
+            right: "true"
+
+        # ---- Silver (only if Bronze gate passed) ----
+        - task_key: silver_payments
+          environment_key: default
+          depends_on: [{ task_key: bronze_gate_check, outcome: "true" }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "silver_payments",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
+        - task_key: silver_customer_scd2
+          environment_key: default
+          depends_on: [{ task_key: bronze_gate_check, outcome: "true" }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "silver_customer_scd2",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
+
+        # ---- Silver DQ gate ----
+        - task_key: silver_dq_gate
+          environment_key: default
+          depends_on:
+            - { task_key: silver_payments }
+            - { task_key: silver_customer_scd2 }
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "silver_dq_gate",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
+        - task_key: silver_dq_check
+          depends_on: [{ task_key: silver_dq_gate }]
+          condition_task:
+            op: EQUAL_TO
+            left: "{{tasks.silver_dq_gate.values.gate_passed}}"
+            right: "true"
+
+        # ---- dbt Gold (only if Silver DQ gate passed) ----
+        # dbt tasks need compute for the dbt CLI (environment_key) AND a warehouse
+        # for the SQL; the newer CLI requires both.
+        - task_key: dbt_build
+          environment_key: default
+          depends_on: [{ task_key: silver_dq_check, outcome: "true" }]
+          dbt_task:
+            project_directory: ./dbt
+            # Silver payments + customer SCD2 are both real now, so build the full
+            # Gold graph: stg_payments/stg_customer -> fact_payments, dim_customer
+            # (+history) -> daily_payment_summary. `dbt build` also runs the tests.
+            commands: ["dbt deps", "dbt build --vars '{catalog: ${var.catalog}}'"]
+            warehouse_id: ${var.warehouse_id}
+        - task_key: dbt_test
+          environment_key: default
+          depends_on: [{ task_key: dbt_build }]
+          # dbt test exits non-zero on failure -> this task (and the job) fails
+          dbt_task:
+            project_directory: ./dbt
+            commands: ["dbt test --vars '{catalog: ${var.catalog}}'"]
+            warehouse_id: ${var.warehouse_id}
+
+        # ---- governance validation (fails job on PII/access violation) ----
+        - task_key: governance_validation
+          environment_key: default
+          depends_on: [{ task_key: dbt_test }]
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "governance_validation"]
+
+        # ---- publish / notify ----
+        - task_key: publish_notify
+          environment_key: default
+          depends_on: [{ task_key: governance_validation }]
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "publish_notify",
+                         "--run_id", "{{job.parameters.run_id}}"]
+
+        # ---- monitoring/control: runs whatever happened (ALL_DONE) ----
+        - task_key: write_status
+          environment_key: default
+          depends_on: [{ task_key: publish_notify }]
+          run_if: ALL_DONE
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "write_status",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--env", "{{job.parameters.env}}"]
+
+    # ======================================================================
+    # SMOKE TEST — workspace deployment readiness (no real source credentials)
+    #   Runs the whole DAG in-process over seed/in-memory sources (Oracle/SFTP/
+    #   Salesforce calls are the reference InMemory* clients — disabled external
+    #   calls), and asserts: init runs, Bronze sample tasks run, gates work, the
+    #   dbt task is callable, governance validation runs, monitoring writes the
+    #   control rows. Run after `bundle deploy` to verify wiring end-to-end.
+    # ======================================================================
+    investsphere_payments_smoke:
+      name: investsphere_payments_smoke
+      tags: { project: investsphere_payments, cadence: on_demand, purpose: smoke_test }
+      max_concurrent_runs: 1
+      email_notifications: *notify
+      parameters:
+        - { name: env, default: dev }
+        - { name: catalog, default: "${var.catalog}" }
+        - { name: run_id, default: "{{job.run_id}}" }
+      environments:
+        - environment_key: default
+          spec: { client: "2" }
+      tasks:
+        - task_key: smoke_test
+          environment_key: default
+          spark_python_task:
+            python_file: ./pipelines/smoke_test.py
+            parameters: ["--env", "{{job.parameters.env}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--run_id", "{{job.parameters.run_id}}"]
+
+    # (The earlier minimal "eod" reference job was removed — the daily_e2e job
+    #  above supersedes it, and every task now declares its compute.)

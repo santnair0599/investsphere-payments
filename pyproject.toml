@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "payments-platform"
+version = "1.0.0"
+description = "InvestSphere Payments — Financial Services / Investment & Payments lakehouse platform on Azure Databricks"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Santosh Nair", email = "santnair0599@gmail.com" }]
+keywords = ["databricks", "lakehouse", "unity-catalog", "dbt", "cdc",
+            "data-engineering", "azure", "asset-bundles", "terraform"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
