@@ -14,7 +14,7 @@
 catalog: investsphere_dev
 secret_scope: investsphere_payments
 etl_service_principal: spn_investsphere_etl
-warehouse_id: 2eb48546973d1621            # REQUIRED before deploy: terraform output -raw warehouse_id
+warehouse_id: 10bc7b3fe3d39e94            # REQUIRED before deploy: terraform output -raw warehouse_id
 
 # --- reference context (NOT bundle vars; used by the deployment runbook) ---
 # storage_account:       stinvestpaymentsdev

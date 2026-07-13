@@ -1,11 +1,31 @@
 [
   {
-    "source_system": "card_scheme_vendor",
-    "file_pattern": "settlement_(?P<date>\\d{4}-\\d{2}-\\d{2})\\.csv",
-    "business_columns": ["settlement_id", "merchant_id", "amount", "currency",
-                         "settlement_date"],
-    "target_bronze_table": "bronze.sftp_settlements",
-    "source_dir": "sftp://card-vendor/incoming",
+    "_domain": "entertainment — ticketing vendor: venue master (reference) + daily ticket sales + footfall",
+    "source_system": "ticketing_vendor",
+    "file_pattern": "venues_master_(?P<date>\\d{4}-\\d{2}-\\d{2})\\.csv",
+    "business_columns": ["venue_id", "venue_name", "venue_type", "city",
+                         "emirate", "capacity"],
+    "target_bronze_table": "bronze.entertainment_venues",
+    "source_dir": "sftp://ticketing-vendor/incoming",
+    "load_type": "full",
+    "enabled": true
+  },
+  {
+    "source_system": "ticketing_vendor",
+    "file_pattern": "ticket_sales_(?P<date>\\d{4}-\\d{2}-\\d{2})\\.csv",
+    "business_columns": ["ticket_id", "venue_id", "event_id", "quantity",
+                         "amount", "currency", "sale_date"],
+    "target_bronze_table": "bronze.sftp_ticket_sales",
+    "source_dir": "sftp://ticketing-vendor/incoming",
+    "enabled": true
+  },
+  {
+    "source_system": "ticketing_vendor",
+    "file_pattern": "footfall_(?P<date>\\d{4}-\\d{2}-\\d{2})\\.csv",
+    "business_columns": ["footfall_id", "venue_id", "gate", "visitors",
+                         "footfall_date"],
+    "target_bronze_table": "bronze.sftp_footfall",
+    "source_dir": "sftp://ticketing-vendor/incoming",
     "enabled": true
   }
 ]

@@ -1,25 +1,53 @@
 [
-  {"source_system": "oracle", "source_table": "customers",
-   "target_bronze_table": "bronze.oracle_customers",
-   "primary_key": "customer_id", "watermark_column": "last_updated_date",
-   "load_type": "incremental", "enabled": true},
+  {"_domain": "real_estate — Oracle property management system (PMS)"},
 
-  {"source_system": "oracle", "source_table": "transactions",
-   "target_bronze_table": "bronze.oracle_transactions",
-   "primary_key": "transaction_id", "watermark_column": "last_updated_date",
-   "load_type": "incremental", "enabled": true,
-   "_comment": "large table: tuned fetchsize + bounded parallel read on the numeric PK",
-   "fetchsize": 20000,
-   "partition_column": "transaction_id", "num_partitions": 8,
-   "lower_bound": 1, "upper_bound": 10000000},
-
-  {"source_system": "sqlserver", "source_table": "accounts",
-   "target_bronze_table": "bronze.sqlserver_accounts",
-   "primary_key": "account_id", "watermark_column": "modified_at",
+  {"source_system": "oracle", "source_table": "properties",
+   "target_bronze_table": "bronze.oracle_properties",
+   "primary_key": "property_id", "watermark_column": "last_updated_date",
    "load_type": "full", "enabled": true},
 
-  {"source_system": "sqlserver", "source_table": "legacy_audit",
-   "target_bronze_table": "bronze.sqlserver_legacy_audit",
-   "primary_key": "id", "watermark_column": "modified_at",
-   "load_type": "incremental", "enabled": false}
+  {"source_system": "oracle", "source_table": "leases",
+   "target_bronze_table": "bronze.oracle_leases",
+   "primary_key": "lease_id", "watermark_column": "last_updated_date",
+   "load_type": "incremental", "enabled": true},
+
+  {"source_system": "oracle", "source_table": "occupancy_daily",
+   "target_bronze_table": "bronze.oracle_occupancy_daily",
+   "primary_key": "occupancy_id", "watermark_column": "occupancy_date",
+   "load_type": "incremental", "enabled": true,
+   "_comment": "high-volume daily facts: tuned fetchsize + bounded parallel read on the numeric PK",
+   "fetchsize": 20000,
+   "partition_column": "occupancy_id", "num_partitions": 8,
+   "lower_bound": 1, "upper_bound": 10000000},
+
+  {"source_system": "oracle", "source_table": "maintenance_orders",
+   "target_bronze_table": "bronze.oracle_maintenance_orders",
+   "primary_key": "work_order_id", "watermark_column": "last_updated_date",
+   "load_type": "incremental", "enabled": true},
+
+  {"_domain": "investment — SQL Server treasury / asset-management system"},
+
+  {"source_system": "sqlserver", "source_table": "assets",
+   "target_bronze_table": "bronze.sqlserver_assets",
+   "primary_key": "asset_id", "watermark_column": "modified_at",
+   "load_type": "full", "enabled": true},
+
+  {"source_system": "sqlserver", "source_table": "asset_performance",
+   "target_bronze_table": "bronze.sqlserver_asset_performance",
+   "primary_key": "performance_id", "watermark_column": "as_of_date",
+   "load_type": "incremental", "enabled": true,
+   "_comment": "high-volume valuation facts: tuned fetchsize + bounded parallel read on the numeric PK",
+   "fetchsize": 20000,
+   "partition_column": "performance_id", "num_partitions": 8,
+   "lower_bound": 1, "upper_bound": 10000000},
+
+  {"source_system": "sqlserver", "source_table": "risk_exposure",
+   "target_bronze_table": "bronze.sqlserver_risk_exposure",
+   "primary_key": "exposure_id", "watermark_column": "as_of_date",
+   "load_type": "incremental", "enabled": true},
+
+  {"source_system": "sqlserver", "source_table": "cashflow",
+   "target_bronze_table": "bronze.sqlserver_cashflow",
+   "primary_key": "cashflow_id", "watermark_column": "value_date",
+   "load_type": "incremental", "enabled": true}
 ]

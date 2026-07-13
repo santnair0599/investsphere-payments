@@ -5,13 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "payments-platform"
 version = "1.0.0"
-description = "InvestSphere Payments — Financial Services / Investment & Payments lakehouse platform on Azure Databricks"
+description = "InvestSphere — Diversified enterprise lakehouse (real estate, hospitality, entertainment, investment) on Azure Databricks, with an Azure AI Foundry / LangGraph business decision agent (RAG, tool calling, evals, guardrails, observability)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Santosh Nair", email = "santnair0599@gmail.com" }]
 keywords = ["databricks", "lakehouse", "unity-catalog", "dbt", "cdc",
-            "data-engineering", "azure", "asset-bundles", "terraform"]
+            "data-engineering", "azure", "asset-bundles", "terraform",
+            "genai", "azure-ai-foundry", "azure-openai", "rag", "langgraph",
+            "ai-agent", "llm-evaluation", "guardrails"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

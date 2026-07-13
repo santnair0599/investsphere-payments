@@ -1,5 +1,6 @@
 [
   {
+    "_domain": "customer — enterprise CRM: Account=segment/company, Contact=customer/guest, Opportunity=deal pipeline, Case=guest review/sentiment",
     "source_system": "salesforce",
     "source_object": "Account",
     "target_bronze_table": "bronze.sfdc_account",
@@ -25,6 +26,16 @@
     "target_bronze_table": "bronze.sfdc_opportunity",
     "primary_key": "Id",
     "watermark_column": "SystemModstamp",
+    "load_type": "incremental",
+    "include_deleted": true,
+    "enabled": true
+  },
+  {
+    "source_system": "salesforce",
+    "source_object": "Case",
+    "target_bronze_table": "bronze.sfdc_case",
+    "primary_key": "Id",
+    "watermark_column": "LastModifiedDate",
     "load_type": "incremental",
     "include_deleted": true,
     "enabled": true

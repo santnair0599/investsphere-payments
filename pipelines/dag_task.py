@@ -116,15 +116,26 @@ def task_bronze_validation_gate(params):
 
 
 def task_silver(params, entity):
-    # Payments Silver (parse/DQ/quarantine/dedup/MERGE) and customer SCD2
-    # (Delta SCD2 MERGE) are IMPLEMENTED with real Spark.
-    if entity == "silver_payments":
-        from payments_platform.databricks.silver_payments import run
-        run(catalog=params["catalog"], run_id=params["run_id"])
-        return
+    # Enterprise Silver conformers — each mirrors the payments pattern
+    # (parse/DQ/quarantine/dedup/MERGE). customer SCD2 is the shared guest/customer
+    # dimension (Delta SCD2 MERGE from Debezium CDC).
     if entity == "silver_customer_scd2":
         from payments_platform.databricks.silver_customer_scd2 import run
         run(catalog=params["catalog"], run_id=params["run_id"])
+        return
+    # domain conformers (real estate / hospitality / entertainment / investment / customer CRM)
+    _DOMAIN_CONFORMERS = {
+        "silver_realestate":    "payments_platform.databricks.silver_realestate",
+        "silver_hospitality":   "payments_platform.databricks.silver_hospitality",
+        "silver_entertainment": "payments_platform.databricks.silver_entertainment",
+        "silver_investment":    "payments_platform.databricks.silver_investment",
+        "silver_customer":      "payments_platform.databricks.silver_customer",
+        "silver_payments":      "payments_platform.databricks.silver_payments",  # legacy, retained
+    }
+    module = _DOMAIN_CONFORMERS.get(entity)
+    if module:
+        import importlib
+        importlib.import_module(module).run(catalog=params["catalog"], run_id=params["run_id"])
         return
     print("silver:%s -> NOT IMPLEMENTED YET (reference stub)" % entity)
 
@@ -189,7 +200,9 @@ def main():
         task_bronze(params, task)
     elif task == "bronze_validation_gate":
         task_bronze_validation_gate(params)
-    elif task in ("silver_payments", "silver_customer_scd2"):
+    elif task in ("silver_payments", "silver_customer_scd2", "silver_realestate",
+                  "silver_hospitality", "silver_entertainment", "silver_investment",
+                  "silver_customer"):
         task_silver(params, task)
     elif task == "silver_dq_gate":
         task_silver_dq_gate(params)

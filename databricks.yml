@@ -231,16 +231,10 @@ resources:
             left: "{{tasks.bronze_validation_gate.values.gate_passed}}"
             right: "true"
 
-        # ---- Silver (only if Bronze gate passed) ----
-        - task_key: silver_payments
-          environment_key: default
-          depends_on: [{ task_key: bronze_gate_check, outcome: "true" }]
-          <<: *retry
-          spark_python_task:
-            python_file: ./pipelines/dag_task.py
-            parameters: ["--task", "silver_payments",
-                         "--run_id", "{{job.parameters.run_id}}",
-                         "--catalog", "{{job.parameters.catalog}}"]
+        # ---- Silver conformers (only if Bronze gate passed) ----
+        # One conformer per enterprise domain; each mirrors the payments
+        # parse/DQ/quarantine/dedup/MERGE pattern. customer_scd2 is the shared
+        # guest/customer SCD2 dimension (Debezium CDC).
         - task_key: silver_customer_scd2
           environment_key: default
           depends_on: [{ task_key: bronze_gate_check, outcome: "true" }]
@@ -250,13 +244,62 @@ resources:
             parameters: ["--task", "silver_customer_scd2",
                          "--run_id", "{{job.parameters.run_id}}",
                          "--catalog", "{{job.parameters.catalog}}"]
+        - task_key: silver_realestate
+          environment_key: default
+          depends_on: [{ task_key: bronze_gate_check, outcome: "true" }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "silver_realestate",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
+        - task_key: silver_hospitality
+          environment_key: default
+          depends_on: [{ task_key: bronze_gate_check, outcome: "true" }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "silver_hospitality",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
+        - task_key: silver_entertainment
+          environment_key: default
+          depends_on: [{ task_key: bronze_gate_check, outcome: "true" }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "silver_entertainment",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
+        - task_key: silver_investment
+          environment_key: default
+          depends_on: [{ task_key: bronze_gate_check, outcome: "true" }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "silver_investment",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
+        - task_key: silver_customer
+          environment_key: default
+          depends_on: [{ task_key: bronze_gate_check, outcome: "true" }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "silver_customer",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
 
         # ---- Silver DQ gate ----
         - task_key: silver_dq_gate
           environment_key: default
           depends_on:
-            - { task_key: silver_payments }
             - { task_key: silver_customer_scd2 }
+            - { task_key: silver_realestate }
+            - { task_key: silver_hospitality }
+            - { task_key: silver_entertainment }
+            - { task_key: silver_investment }
+            - { task_key: silver_customer }
           spark_python_task:
             python_file: ./pipelines/dag_task.py
             parameters: ["--task", "silver_dq_gate",
@@ -348,6 +391,100 @@ resources:
             parameters: ["--env", "{{job.parameters.env}}",
                          "--catalog", "{{job.parameters.catalog}}",
                          "--run_id", "{{job.parameters.run_id}}"]
+
+    # ======================================================================
+    # DEV: Bronze-only on SEED data — no Oracle/REST/Salesforce connectivity.
+    #   Runs the three file/Auto-Loader Bronze feeds against seed files that
+    #   must already be staged in the landing Volume (see docs). Lets you build
+    #   and inspect Bronze before wiring real sources or Silver.
+    #     databricks bundle run investsphere_payments_bronze_dev -t dev
+    # ======================================================================
+    investsphere_payments_bronze_dev:
+      name: investsphere_payments_bronze_dev
+      tags: { project: investsphere_payments, cadence: on_demand, purpose: bronze_dev }
+      max_concurrent_runs: 1
+      parameters:
+        - { name: env, default: dev }
+        - { name: catalog, default: "${var.catalog}" }
+        - { name: run_id, default: "{{job.run_id}}" }
+        - { name: run_date, default: "2026-06-30" }   # matches the seed file dates
+        - { name: load_mode, default: full }
+      environments:
+        - environment_key: default
+          spec: { client: "2" }
+      tasks:
+        # seed-backed Bronze feeds — independent, run in parallel
+        - task_key: bronze_payments_file
+          environment_key: default
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "bronze_payments_file",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--load_mode", "{{job.parameters.load_mode}}"]
+        - task_key: bronze_customer_cdc
+          environment_key: default
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "bronze_customer_cdc",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--load_mode", "{{job.parameters.load_mode}}"]
+        - task_key: bronze_sftp
+          environment_key: default
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "bronze_sftp",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--run_date", "{{job.parameters.run_date}}"]
+
+    # ======================================================================
+    # DEV: Silver-only on the seed-based Bronze (payments + customer CDC).
+    #   Runs the two conformers whose Bronze inputs exist from the seed run,
+    #   then the Silver DQ validation gate. run_id is EMPTY on purpose so each
+    #   conformer reprocesses ALL Bronze rows (not just one run's) — the MERGEs
+    #   are idempotent, so re-running is safe.
+    #     databricks bundle run investsphere_payments_silver_dev -t dev
+    # ======================================================================
+    investsphere_payments_silver_dev:
+      name: investsphere_payments_silver_dev
+      tags: { project: investsphere_payments, cadence: on_demand, purpose: silver_dev }
+      max_concurrent_runs: 1
+      parameters:
+        - { name: env, default: dev }
+        - { name: catalog, default: "${var.catalog}" }
+        - { name: run_id, default: "" }   # empty => reprocess ALL Bronze rows
+      environments:
+        - environment_key: default
+          spec: { client: "2" }
+      tasks:
+        # conformers whose Bronze inputs exist from the seed run (parallel)
+        - task_key: silver_payments
+          environment_key: default
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "silver_payments",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
+        - task_key: silver_customer_scd2
+          environment_key: default
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "silver_customer_scd2",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
+        # Silver DQ validation gate (runs after both conformers)
+        - task_key: silver_dq_gate
+          environment_key: default
+          depends_on:
+            - { task_key: silver_payments }
+            - { task_key: silver_customer_scd2 }
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "silver_dq_gate",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
 
     # (The earlier minimal "eod" reference job was removed — the daily_e2e job
     #  above supersedes it, and every task now declares its compute.)
