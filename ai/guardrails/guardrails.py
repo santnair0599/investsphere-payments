@@ -27,18 +27,31 @@ _PHONE = re.compile(r"\+?\d[\d\s().-]{7,}\d")
 _PAN = re.compile(r"\b(?:\d[ -]*?){13,19}\b")  # card-like PANs
 
 # ---- prompt-injection / jailbreak heuristics
+# The qualifier run is `*`-quantified on purpose: "ignore all previous instructions" is
+# the canonical phrasing and stacks three qualifiers. Matching only one silently lets it
+# through.
+_QUALIFIER = r"(?:all\s+|any\s+|the\s+|your\s+|my\s+|previous\s+|prior\s+|earlier\s+|above\s+|foregoing\s+)*"
 _INJECTION = re.compile(
-    r"(ignore (all|previous|your) (instructions|rules)"
-    r"|disregard (the|your) (system|instructions)"
-    r"|you are now|reveal (your )?(system )?prompt"
-    r"|drop table|delete from|update .* set|;--|exfiltrat)",
+    r"("
+    rf"(?:ignore|disregard|forget|override)\s+{_QUALIFIER}"
+    r"(instructions?|rules?|directives?|guardrails?|guidelines?|policy|policies|"
+    r"system(?:\s+prompt)?|row\s+filters?|filters?|constraints?)"
+    rf"|(?:reveal|print|show|repeat|output|dump|leak|expose)\s+{_QUALIFIER}"
+    r"(?:full\s+|entire\s+|raw\s+)*(?:system\s+)?(prompt|instructions?|api\s+keys?|credentials?|secrets?)"
+    r"|you are now\b|\bas dan\b|\bdo anything now\b|\bdeveloper mode\b"
+    r"|(?:bypass|circumvent|evade|get around|turn off|disable)\s+(?:\w+\s+){0,3}?"
+    r"(filters?|mask\w*|guardrails?|governance|rls|permissions?|controls?)"
+    r"|\braw\s+pii\b|\bunmasked\b"
+    r"|drop table|delete from|update .* set|;--|exfiltrat"
+    r")",
     re.IGNORECASE,
 )
 
 # ---- write/action intents that require human approval
 _ACTION = re.compile(
     r"\b(approve|execute|run|apply|create|update|delete|increase|reduce|send|issue|"
-    r"cancel|refund|charge)\b.*\b(rent|price|lease|campaign|asset|booking|action|order)\b",
+    r"cancel|refund|charge|transfer|remit|disburse|wire)\b.*"
+    r"\b(rent|price|lease|campaign|asset|booking|action|order|payment|funds|account|aed|usd)\b",
     re.IGNORECASE,
 )
 
@@ -173,12 +186,14 @@ def scan_output(text: str) -> GuardResult:
     if _EMAIL.search(redacted):
         reasons.append("email address present")
         redacted = _EMAIL.sub("[REDACTED_EMAIL]", redacted)
-    if _PHONE.search(redacted):
-        reasons.append("phone number present")
-        redacted = _PHONE.sub("[REDACTED_PHONE]", redacted)
+    # PAN before PHONE: the phone pattern also matches a spaced 16-digit card, so running
+    # it first would swallow every PAN and mislabel it as a phone number in the audit trail.
     if _PAN.search(redacted):
         reasons.append("card/PAN-like number present")
         redacted = _PAN.sub("[REDACTED_PAN]", redacted)
+    if _PHONE.search(redacted):
+        reasons.append("phone number present")
+        redacted = _PHONE.sub("[REDACTED_PHONE]", redacted)
     if reasons:
         # answers must cite aggregates, not raw identifiers — block and redact
         return GuardResult(False, "BLOCKED_PII", reasons, redacted_text=redacted)

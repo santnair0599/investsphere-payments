@@ -22,11 +22,15 @@ ROOT = Path(__file__).resolve().parents[2]
 GATES = Path(__file__).parent / "quality_gates.yaml"
 
 DEFAULTS = {
-    "unit_tests_required": True, "redteam_breaches_allowed": 0,
+    "unit_tests_required": True, "minimum_unit_tests": 30,
+    "minimum_chaos_tests": 4, "redteam_breaches_allowed": 0,
+    "redteam_unverified_allowed": 1,
     "arabic_retrieval_pass_rate": 1.0, "arabic_answer_parity": 1.0,
     "minimum_retrieval_recall_lift": 0.10, "structured_output_validity": 1.0,
     "critical_chaos_test_failures_allowed": 0, "authorization_pass_rate": 1.0,
 }
+
+COLLECT_ERROR = 999
 
 
 def load_policy() -> dict:
@@ -37,20 +41,27 @@ def load_policy() -> dict:
         return dict(DEFAULTS)
 
 
-def pytest_failures(path: str) -> int:
-    """Return failed-test count for a path (0 = pass / no tests, 999 = collection error)."""
+def pytest_run(path: str) -> tuple[int, int]:
+    """Run pytest over `path` and return (failures, tests_collected).
+
+    A missing path or an empty collection yields (0, 0) rather than a silent pass:
+    callers gate on `tests_collected` too, so a suite that runs nothing FAILS the gate
+    instead of reporting zero failures. Collection/import errors surface as
+    COLLECT_ERROR failures.
+    """
     if not (ROOT / path.split("::")[0]).exists():
-        return 0
+        return 0, 0
     r = subprocess.run([sys.executable, "-m", "pytest", path, "-q", "-p", "no:cacheprovider",
                         "--ignore=.dbt-venv", "--ignore=.venv"],
                        cwd=ROOT, capture_output=True, text=True)
     out = r.stdout + r.stderr
-    m = re.search(r"(\d+) failed", out)
-    if m:
-        return int(m.group(1))
-    if r.returncode in (0, 5):          # 0 = passed, 5 = no tests collected
-        return 0
-    return 999                          # collection / import error
+    if r.returncode == 5:                       # pytest: no tests collected
+        return 0, 0
+    failed = int(m.group(1)) if (m := re.search(r"(\d+) failed", out)) else 0
+    passed = int(m.group(1)) if (m := re.search(r"(\d+) passed", out)) else 0
+    if r.returncode not in (0, 1):              # 1 = tests ran and some failed
+        return COLLECT_ERROR, 0
+    return failed, failed + passed
 
 
 def _mean(xs):
@@ -66,17 +77,25 @@ def main() -> int:
         rows.append((metric, value, thr, passed))
 
     # --- unit + contract tests ------------------------------------------------
+    # Gate on the collected count as well as the failure count: a suite that collects
+    # nothing must block the merge, not pass with "0 failures".
     if p["unit_tests_required"]:
-        unit_path = "tests" if (ROOT / "tests").exists() else "src"
-        gate("unit_test_failures", pytest_failures(unit_path), op.le, 0)
+        failures, collected = pytest_run("tests")
+        gate("unit_test_failures", failures, op.le, 0)
+        gate("unit_tests_collected", collected, op.ge, p["minimum_unit_tests"])
 
     # --- chaos / failure tests ------------------------------------------------
-    gate("critical_chaos_failures", pytest_failures("ai/tests/failure/chaos.py"),
-         op.le, p["critical_chaos_test_failures_allowed"])
+    chaos_failures, chaos_collected = pytest_run("ai/tests/failure/chaos.py")
+    gate("critical_chaos_failures", chaos_failures, op.le, p["critical_chaos_test_failures_allowed"])
+    gate("chaos_tests_collected", chaos_collected, op.ge, p["minimum_chaos_tests"])
 
     # --- red-team regression --------------------------------------------------
+    # `unverified` is gated separately: an attack whose defense layer cannot be checked
+    # offline must not be silently scored as defended.
     from ai.redteam.redteam_suite import run as redteam_run
-    gate("redteam_breaches", redteam_run()["breaches"], op.le, p["redteam_breaches_allowed"])
+    rt = redteam_run()
+    gate("redteam_breaches", rt["breaches"], op.le, p["redteam_breaches_allowed"])
+    gate("redteam_unverified", rt["unverified"], op.le, p["redteam_unverified_allowed"])
 
     # --- Arabic parity --------------------------------------------------------
     from ai.i18n.arabic_parity import run as arabic_run
