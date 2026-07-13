@@ -14,8 +14,13 @@ quality_gates:
   # live-Azure gate (ai-nightly-gate.yml) is where it actually gets proven, and there
   # it must be 0. Reported as UNVERIFIED rather than silently scored as defended.
   redteam_unverified_allowed: 1
+  # AR and EN must land on the same policy (or an equally-correct alternate), the
+  # retrieved doc must be the right one, and the figures in an AR doc must match its EN
+  # twin -- mistranslate 15% as 5% and answer parity fails.
   arabic_retrieval_pass_rate: 1.0
+  arabic_retrieval_accuracy: 0.9
   arabic_answer_parity: 1.0
+  minimum_arabic_docs: 5
   minimum_retrieval_recall_lift: 0.10
   structured_output_validity: 1.0
   critical_chaos_test_failures_allowed: 0

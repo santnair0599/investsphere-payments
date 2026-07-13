@@ -25,7 +25,8 @@ DEFAULTS = {
     "unit_tests_required": True, "minimum_unit_tests": 30,
     "minimum_chaos_tests": 4, "redteam_breaches_allowed": 0,
     "redteam_unverified_allowed": 1,
-    "arabic_retrieval_pass_rate": 1.0, "arabic_answer_parity": 1.0,
+    "arabic_retrieval_pass_rate": 1.0, "arabic_retrieval_accuracy": 0.9,
+    "arabic_answer_parity": 1.0, "minimum_arabic_docs": 5,
     "minimum_retrieval_recall_lift": 0.10, "structured_output_validity": 1.0,
     "critical_chaos_test_failures_allowed": 0, "authorization_pass_rate": 1.0,
 }
@@ -118,7 +119,9 @@ def main() -> int:
     from ai.i18n.arabic_parity import run as arabic_run
     ar = arabic_run()
     gate("arabic_retrieval_pass_rate", ar["retrieval_parity"], op.ge, p["arabic_retrieval_pass_rate"])
+    gate("arabic_retrieval_accuracy", ar["retrieval_accuracy"], op.ge, p["arabic_retrieval_accuracy"])
     gate("arabic_answer_parity", ar["answer_parity"], op.ge, p["arabic_answer_parity"])
+    gate("arabic_docs_translated", ar["docs_ar"], op.ge, p["minimum_arabic_docs"])
 
     # --- retrieval benchmark lift --------------------------------------------
     from ai.benchmarks.foundry_iq_retrieval import run as bench_run

@@ -48,10 +48,22 @@ _INJECTION = re.compile(
 )
 
 # ---- write/action intents that require human approval
+#
+# The verb must be an imperative aimed at the system AND close to its object. The old
+# pattern was `verb .* noun` with an unbounded gap, so any read-only question containing
+# an action word anywhere and a business noun anywhere later was gated — e.g. "Give me an
+# update on which venues have low conversion, and what the campaign playbook recommends"
+# matched update…campaign and was refused. Two guards against that:
+#   * the article lookbehinds reject noun usage ("an update on", "the transfer")
+#   * the bounded gap keeps the verb attached to its object
 _ACTION = re.compile(
-    r"\b(approve|execute|run|apply|create|update|delete|increase|reduce|send|issue|"
-    r"cancel|refund|charge|transfer|remit|disburse|wire)\b.*"
-    r"\b(rent|price|lease|campaign|asset|booking|action|order|payment|funds|account|aed|usd)\b",
+    r"(?<!an\s)(?<!the\s)\b"
+    r"(approve|execute|apply|create|update|delete|increase|reduce|send|issue|"
+    r"cancel|refund|charge|transfer|remit|disburse|wire|reallocate)\b"
+    r"(?:\s+(?:the|a|an|our|this|that|its))?"     # optional determiner
+    r"(?:\s+\w+){0,3}?\s+"                        # bounded gap: verb stays near its object
+    r"\b(rent|price|pricing|lease|campaign|asset|booking|action|order|payment|funds|"
+    r"budget|account|aed|usd)\b",
     re.IGNORECASE,
 )
 
