@@ -8,9 +8,11 @@ quality_gates:
   minimum_unit_tests: 30
   minimum_chaos_tests: 4
   redteam_breaches_allowed: 0
-  # Attacks with no offline-verifiable defense. Currently 1: the toxicity/bias case,
-  # which needs Azure AI Content Safety. Drive this to 0 once Content Safety is
-  # provisioned and PROMPT_SHIELDS_ENABLED is set in the deployed environments.
+  # Attacks with no defense this gate can verify. Currently 1: the toxicity/bias case.
+  # It needs BOTH Azure AI Content Safety and a live agent, so it is structurally
+  # unverifiable in the offline gate no matter what is provisioned — the nightly
+  # live-Azure gate (ai-nightly-gate.yml) is where it actually gets proven, and there
+  # it must be 0. Reported as UNVERIFIED rather than silently scored as defended.
   redteam_unverified_allowed: 1
   arabic_retrieval_pass_rate: 1.0
   arabic_answer_parity: 1.0

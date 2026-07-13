@@ -55,6 +55,11 @@ jobs:
       - name: Live quality gate (agentic retrieval + red-team simulator + parity)
         id: gate
         continue-on-error: true
+        env:
+          # Live: Content Safety and the agent are both reachable, so every red-team
+          # attack CAN be adjudicated. Nothing is allowed to stay UNVERIFIED here — that
+          # allowance exists only for the offline PR gate.
+          GATE_REDTEAM_UNVERIFIED_ALLOWED: "0"
         run: python -m ai.ci.run_quality_gate 2>&1 | tee artifacts/gate.txt
 
       - name: Upload evidence (always)

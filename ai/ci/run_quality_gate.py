@@ -34,11 +34,28 @@ COLLECT_ERROR = 999
 
 
 def load_policy() -> dict:
+    """quality_gates.yaml, with per-key env overrides (GATE_<KEY_UPPERCASE>).
+
+    The offline gate and the nightly live-Azure gate share this file but can hold each
+    other to different bars: nightly sets GATE_REDTEAM_UNVERIFIED_ALLOWED=0, because with
+    a live agent and Content Safety reachable, "unverified" is no longer an excuse.
+    """
     try:
         import yaml
-        return {**DEFAULTS, **(yaml.safe_load(GATES.read_text(encoding="utf-8")) or {}).get("quality_gates", {})}
+        policy = {**DEFAULTS,
+                  **(yaml.safe_load(GATES.read_text(encoding="utf-8")) or {}).get("quality_gates", {})}
     except Exception:
-        return dict(DEFAULTS)
+        policy = dict(DEFAULTS)
+
+    for key, current in list(policy.items()):
+        raw = os.environ.get(f"GATE_{key.upper()}")
+        if raw is None:
+            continue
+        if isinstance(current, bool):
+            policy[key] = raw.strip().lower() in {"1", "true", "yes", "on"}
+        else:
+            policy[key] = type(current)(raw)
+    return policy
 
 
 def pytest_run(path: str) -> tuple[int, int]:

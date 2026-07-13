@@ -43,6 +43,17 @@ param openAiTokensPerMinute int = 20000
 @description('Per-key requests-per-minute limit enforced at the gateway.')
 param openAiRequestsPerMinute int = 120
 
+// ---- Azure AI service feature flags -------------------------------------------------
+// The app reads these as env vars. They default ON because the backing accounts are now
+// provisioned below; the code keeps its deterministic fallback either way, so flipping
+// one off degrades a capability rather than breaking the agent.
+@description('Call Azure AI Content Safety Prompt Shields in the input guard. The deterministic regex backstop always runs regardless.')
+param enablePromptShields bool = true
+@description('Call Azure AI Document Intelligence for settlement/invoice reconciliation.')
+param enableDocIntel bool = true
+@description('Derive review/case sentiment with Azure AI Language instead of the offline lexicon.')
+param enableSentiment bool = true
+
 var tags = { project: 'investsphere', plane: 'genai' }
 var apimName = '${name}-apim'
 var apimGatewayUrl = 'https://${apimName}.azure-api.net'
@@ -109,6 +120,36 @@ resource search 'Microsoft.Search/searchServices@2024-06-01-preview' = {
   properties: { semanticSearch: 'standard', replicaCount: 1, partitionCount: 1 }
 }
 
+// ---- Azure AI Content Safety (Prompt Shields) ---------------------------
+// The input guard calls shieldPrompt here when PROMPT_SHIELDS_ENABLED is set. Without
+// this account the flag was inert: the guard silently stayed on the regex backstop, and
+// the red-team suite could not verify its toxicity/bias case at all.
+resource contentSafety 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
+  name: '${name}-safety'
+  location: location
+  kind: 'ContentSafety'
+  sku: { name: 'S0' }
+  properties: { customSubDomainName: '${name}-safety', publicNetworkAccess: 'Enabled' }
+}
+
+// ---- Azure AI Document Intelligence (settlement/invoice reconciliation) --
+resource docIntel 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
+  name: '${name}-docintel'
+  location: location
+  kind: 'FormRecognizer'
+  sku: { name: 'S0' }
+  properties: { customSubDomainName: '${name}-docintel', publicNetworkAccess: 'Enabled' }
+}
+
+// ---- Azure AI Language (sentiment enrichment) ---------------------------
+resource language 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
+  name: '${name}-language'
+  location: location
+  kind: 'TextAnalytics'
+  sku: { name: 'S' }
+  properties: { customSubDomainName: '${name}-language', publicNetworkAccess: 'Enabled' }
+}
+
 // ---- Storage account backing the Foundry hub (REQUIRED by the ML workspace) ---
 // Regular blob storage (no hierarchical namespace) — distinct from the Databricks
 // ADLS Gen2 lake (that's provisioned by Terraform on the data plane).
@@ -172,6 +213,24 @@ resource kvOpenAiKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: kv
   name: 'openai-api-key'
   properties: { value: openai.listKeys().key1 }
+}
+
+resource kvContentSafetyKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'content-safety-key'
+  properties: { value: contentSafety.listKeys().key1 }
+}
+
+resource kvDocIntelKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'doc-intel-key'
+  properties: { value: docIntel.listKeys().key1 }
+}
+
+resource kvLanguageKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'language-key'
+  properties: { value: language.listKeys().key1 }
 }
 
 // The agent's user-assigned identity must be able to READ the Key Vault secrets it references.
@@ -360,6 +419,9 @@ resource agent 'Microsoft.App/containerApps@2024-03-01' = {
       secrets: [
         { name: 'databricks-token', keyVaultUrl: kvDbxToken.properties.secretUri, identity: uami.id }
         { name: 'openai-api-key', keyVaultUrl: kvOpenAiKey.properties.secretUri, identity: uami.id }
+        { name: 'content-safety-key', keyVaultUrl: kvContentSafetyKey.properties.secretUri, identity: uami.id }
+        { name: 'doc-intel-key', keyVaultUrl: kvDocIntelKey.properties.secretUri, identity: uami.id }
+        { name: 'language-key', keyVaultUrl: kvLanguageKey.properties.secretUri, identity: uami.id }
       ]
     }
     template: {
@@ -380,6 +442,19 @@ resource agent 'Microsoft.App/containerApps@2024-03-01' = {
           { name: 'DATABRICKS_HTTP_PATH', value: databricksHttpPath }
           { name: 'DATABRICKS_CATALOG', value: databricksCatalog }
           { name: 'DATABRICKS_TOKEN', secretRef: 'databricks-token' }
+          // ---- Azure AI services + the flags that switch them on -------------
+          // These flags were previously absent from the Container App, so the code's
+          // Azure-native paths could never activate in a deployed environment and
+          // silently ran on their offline fallbacks.
+          { name: 'AZURE_CONTENT_SAFETY_ENDPOINT', value: contentSafety.properties.endpoint }
+          { name: 'AZURE_CONTENT_SAFETY_KEY', secretRef: 'content-safety-key' }
+          { name: 'PROMPT_SHIELDS_ENABLED', value: string(enablePromptShields) }
+          { name: 'AZURE_DOC_INTEL_ENDPOINT', value: docIntel.properties.endpoint }
+          { name: 'AZURE_DOC_INTEL_KEY', secretRef: 'doc-intel-key' }
+          { name: 'DOC_INTEL_ENABLED', value: string(enableDocIntel) }
+          { name: 'AZURE_LANGUAGE_ENDPOINT', value: language.properties.endpoint }
+          { name: 'AZURE_LANGUAGE_KEY', secretRef: 'language-key' }
+          { name: 'SENTIMENT_ENRICHMENT_ENABLED', value: string(enableSentiment) }
         ]
       } ]
       scale: { minReplicas: 1, maxReplicas: 5 }
@@ -390,6 +465,9 @@ resource agent 'Microsoft.App/containerApps@2024-03-01' = {
 output agentFqdn string = agent.properties.configuration.ingress.fqdn
 output openaiEndpoint string = openai.properties.endpoint
 output searchEndpoint string = 'https://${search.name}.search.windows.net'
+output contentSafetyEndpoint string = contentSafety.properties.endpoint
+output docIntelEndpoint string = docIntel.properties.endpoint
+output languageEndpoint string = language.properties.endpoint
 output apimEnabled bool = enableApim
 output apimGatewayUrl string = enableApim ? apimGatewayUrl : ''
 output agentOpenAiEndpoint string = agentOpenAiEndpoint
