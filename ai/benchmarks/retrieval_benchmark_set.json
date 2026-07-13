@@ -1,0 +1,14 @@
+[
+  {"question": "What is the single-payment limit for standard customers?",
+   "relevant_doc_ids": ["payment_limits_policy#0"], "multi_hop": false},
+  {"question": "Which currency grew the most and does it breach the FX variance policy?",
+   "relevant_doc_ids": ["payment_limits_policy#1", "kpi_definitions#2"], "multi_hop": true},
+  {"question": "If a customer is SUSPENDED can they still receive refunds?",
+   "relevant_doc_ids": ["kyc_and_customer_status_policy#0", "payment_limits_policy#2"], "multi_hop": true},
+  {"question": "How often must a high-risk customer refresh KYC?",
+   "relevant_doc_ids": ["kyc_and_customer_status_policy#0"], "multi_hop": false},
+  {"question": "What approval is needed for a refund over AED 25,000 and who signs off?",
+   "relevant_doc_ids": ["payment_limits_policy#2"], "multi_hop": false},
+  {"question": "Compare the premium single-payment limit to the FX review threshold.",
+   "relevant_doc_ids": ["payment_limits_policy#0", "payment_limits_policy#1"], "multi_hop": true}
+]

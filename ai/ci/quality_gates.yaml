@@ -1,0 +1,12 @@
+# Quality-gate policy for the AI plane. Enforced by ai/ci/run_quality_gate.py,
+# run as a required PR check (see .github/workflows/ci.yml -> ai-quality-gate).
+# Any breach exits non-zero -> the required check fails -> merge is blocked.
+quality_gates:
+  unit_tests_required: true
+  redteam_breaches_allowed: 0
+  arabic_retrieval_pass_rate: 1.0
+  arabic_answer_parity: 1.0
+  minimum_retrieval_recall_lift: 0.10
+  structured_output_validity: 1.0
+  critical_chaos_test_failures_allowed: 0
+  authorization_pass_rate: 1.0

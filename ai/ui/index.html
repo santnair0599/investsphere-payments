@@ -1,0 +1,58 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>InvestSphere — Decision Agent</title>
+<style>
+  body{font-family:system-ui,Segoe UI,sans-serif;max-width:760px;margin:2rem auto;padding:0 1rem}
+  #log{border:1px solid #ddd;border-radius:8px;padding:1rem;min-height:240px;white-space:pre-wrap}
+  .tok{color:#111}.meta{color:#888;font-size:.85rem}
+  .approval{background:#fff7e6;border:1px solid #ffd591;border-radius:8px;padding:.75rem;margin:.5rem 0}
+  button{padding:.5rem .9rem;border-radius:6px;border:1px solid #ccc;cursor:pointer}
+  .ok{background:#237804;color:#fff;border:0}.no{background:#a8071a;color:#fff;border:0}
+  input{width:100%;padding:.6rem;border-radius:6px;border:1px solid #ccc}
+</style>
+<h2>InvestSphere — Enterprise Decision Agent</h2>
+<p class="meta">Answers stream live. Sensitive actions pause for your approval (human-in-the-loop).</p>
+<div id="log"></div>
+<p><input id="q" placeholder="e.g. Top 5 customers by total payment amount?" autofocus></p>
+<button class="ok" onclick="ask()">Ask</button>
+
+<script>
+const log = document.getElementById('log');
+function line(t, cls){ const s=document.createElement('span'); s.className=cls||'tok'; s.textContent=t; log.appendChild(s); }
+
+async function ask(){
+  log.innerHTML=''; const q = document.getElementById('q').value;
+  const res = await fetch('/ask/stream', {method:'POST', headers:{'Content-Type':'application/json'},
+                                          body: JSON.stringify({question:q, session_id:'web'})});
+  const reader = res.body.getReader(); const dec = new TextDecoder(); let buf='';
+  while(true){
+    const {value, done} = await reader.read(); if(done) break;
+    buf += dec.decode(value, {stream:true});
+    let parts = buf.split('\n\n'); buf = parts.pop();
+    for(const p of parts){ handle(p); }
+  }
+}
+function handle(frame){
+  const ev = (frame.match(/event: (.*)/)||[])[1];
+  const data = JSON.parse((frame.match(/data: (.*)/s)||[,'{}'])[1]);
+  if(ev==='token') line(data.text);
+  else if(ev==='trace') line('\n[tools: '+(data.tools_called||[]).join(', ')+']\n','meta');
+  else if(ev==='approval_required') renderApproval(data);
+  else if(ev==='approval_result') line('\n['+(data.approved?'approved':'rejected')+']\n','meta');
+  else if(ev==='done') line('\n','meta');
+}
+function renderApproval(d){
+  const box=document.createElement('div'); box.className='approval';
+  box.innerHTML = `<b>Approval required</b> — the agent wants to run <code>${d.tool}</code>` +
+                  `<br><small>${JSON.stringify(d.args||{})}</small><br><br>`;
+  const yes=document.createElement('button'); yes.className='ok'; yes.textContent='Approve';
+  const no=document.createElement('button'); no.className='no'; no.textContent='Reject'; no.style.marginLeft='.5rem';
+  yes.onclick=()=>decide(d.action_id,true,box); no.onclick=()=>decide(d.action_id,false,box);
+  box.appendChild(yes); box.appendChild(no); log.appendChild(box);
+}
+async function decide(id, approve, box){
+  await fetch('/approve/'+id, {method:'POST', headers:{'Content-Type':'application/json'},
+                               body: JSON.stringify({approve})});
+  box.querySelectorAll('button').forEach(b=>b.disabled=true);
+}
+</script>

@@ -1,0 +1,6 @@
+[
+  {"payment_id": "PAY-1001", "amount": 12500.00, "currency": "AED", "transaction_date": "2026-06-30"},
+  {"payment_id": "PAY-1002", "amount": 8300.50, "currency": "USD", "transaction_date": "2026-06-30"},
+  {"payment_id": "PAY-1003", "amount": 60000.00, "currency": "AED", "transaction_date": "2026-06-30"},
+  {"payment_id": "PAY-9999", "amount": 500.00, "currency": "EUR", "transaction_date": "2026-06-30"}
+]

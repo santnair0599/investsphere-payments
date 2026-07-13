@@ -1,0 +1,12 @@
+[
+  {"en": "What is the single-payment limit for standard customers?",
+   "ar": "ما هو حد الدفعة الواحدة للعملاء العاديين؟", "has_figure": true},
+  {"en": "What is the daily aggregate limit for premium customers?",
+   "ar": "ما هو الحد اليومي الإجمالي للعملاء المميزين؟", "has_figure": true},
+  {"en": "Above what refund amount is manager approval required?",
+   "ar": "ما هو مبلغ الاسترداد الذي يتطلب موافقة المدير؟", "has_figure": true},
+  {"en": "What FX variance percentage triggers a review?",
+   "ar": "ما نسبة انحراف سعر الصرف التي تستدعي المراجعة؟", "has_figure": true},
+  {"en": "Which settlement currencies are supported?",
+   "ar": "ما هي عملات التسوية المدعومة؟", "has_figure": false}
+]
