@@ -1,16 +1,114 @@
 version: 2
 
-# Trusted Silver tables (written by the Spark Silver jobs) are dbt's sources.
+# Trusted Silver tables (written by the Spark Silver conformers) are dbt's sources.
+# One schema per enterprise domain; all DQ-passed, conformed, one row per business key.
 sources:
-  - name: silver_clean
-    catalog: "{{ var('catalog', 'investsphere_dev') }}"
-    schema: silver_clean
-    tables:
-      - name: payment_clean
-        description: "Conformed, DQ-passed payments (one row per payment_id)."
+  # ---- shared customer/guest master (Debezium CDC → SCD2) --------------------
   - name: silver_cdc
     catalog: "{{ var('catalog', 'investsphere_dev') }}"
     schema: silver_cdc
     tables:
       - name: customer_scd2
-        description: "Customer SCD2 history (effective_from/to, is_current, is_deleted)."
+        description: "Customer/guest SCD2 history (effective_from/to, is_current, is_deleted)."
+
+  # ---- payments (file feed → DQ-conformed clean) ----------------------------
+  - name: silver_clean
+    catalog: "{{ var('catalog', 'investsphere_dev') }}"
+    schema: silver_clean
+    tables:
+      - name: payment_clean
+        description: "DQ-passed, deduped payments (one row per payment_id)."
+
+  # ---- real estate (Oracle PMS) ---------------------------------------------
+  - name: silver_realestate
+    catalog: "{{ var('catalog', 'investsphere_dev') }}"
+    schema: silver_realestate
+    tables:
+      - name: property_clean
+        description: "Conformed properties (one row per property_id)."
+      - name: lease_clean
+        description: "Conformed leases (one row per lease_id)."
+      - name: occupancy_clean
+        description: "Daily occupancy facts (property_id, occupancy_date)."
+      - name: maintenance_clean
+        description: "Maintenance work orders (one row per work_order_id)."
+
+  # ---- hospitality (booking platform REST + CRM cases) ----------------------
+  - name: silver_hospitality
+    catalog: "{{ var('catalog', 'investsphere_dev') }}"
+    schema: silver_hospitality
+    tables:
+      - name: hotel_clean
+        description: "Hotel master/dimension source (one row per hotel_id)."
+      - name: booking_clean
+        description: "Conformed hotel bookings (one row per booking_id)."
+      - name: revenue_clean
+        description: "Hotel revenue facts (hotel_id, revenue_date)."
+      - name: guest_review_clean
+        description: "Guest reviews/sentiment (from CRM Case), one row per review_id."
+
+  # ---- entertainment (ticketing SFTP + campaign autoloader) -----------------
+  - name: silver_entertainment
+    catalog: "{{ var('catalog', 'investsphere_dev') }}"
+    schema: silver_entertainment
+    tables:
+      - name: venue_clean
+        description: "Venue master/dimension source (one row per venue_id)."
+      - name: ticket_sales_clean
+        description: "Ticket sales (one row per ticket_id)."
+      - name: footfall_clean
+        description: "Venue footfall facts (venue_id, footfall_date)."
+      - name: campaign_roi_clean
+        description: "Marketing campaign spend/outcomes (one row per campaign_id, campaign_date)."
+
+  # ---- investment (SQL Server treasury/asset system) ------------------------
+  - name: silver_investment
+    catalog: "{{ var('catalog', 'investsphere_dev') }}"
+    schema: silver_investment
+    tables:
+      - name: asset_clean
+        description: "Conformed investment assets (one row per asset_id)."
+      - name: asset_performance_clean
+        description: "Asset valuation/return facts (asset_id, as_of_date)."
+      - name: risk_exposure_clean
+        description: "Asset risk exposure facts (asset_id, as_of_date)."
+      - name: cashflow_clean
+        description: "Asset cashflow facts (asset_id, value_date)."
+
+  # ---- customer / CRM (Salesforce) ------------------------------------------
+  - name: silver_customer
+    catalog: "{{ var('catalog', 'investsphere_dev') }}"
+    schema: silver_customer
+    tables:
+      - name: account_clean
+        description: "CRM accounts → customer segment/company (one row per account_id)."
+      - name: contact_clean
+        description: "CRM contacts → individual customers/guests (one row per contact_id)."
+      - name: opportunity_clean
+        description: "CRM opportunities → deal/leasing pipeline (one row per opportunity_id)."
+
+  # ---- FX (REST) — shared reference for investment/hospitality valuation ----
+  - name: silver_fx
+    catalog: "{{ var('catalog', 'investsphere_dev') }}"
+    schema: silver_fx
+    tables:
+      - name: fx_rates_clean
+        description: "FX rates to AED (one row per currency, rate_date)."
+
+  # ---- operational trust (existing control/audit tables, reused as-is) ------
+  - name: silver_control
+    catalog: "{{ var('catalog', 'investsphere_dev') }}"
+    schema: silver_control
+    tables:
+      - name: pipeline_run
+        description: "Pipeline run lifecycle (STARTED/SUCCESS/FAILED/PARTIAL)."
+      - name: task_run
+        description: "Per-task audit rows (attempt, status, records_written)."
+      - name: table_load_status
+        description: "Per-table load audit (records read/written/rejected, watermark)."
+  - name: silver_quarantine
+    catalog: "{{ var('catalog', 'investsphere_dev') }}"
+    schema: silver_quarantine
+    tables:
+      - name: failed_records
+        description: "Failed Record Register (DQ quarantine) across all domains."

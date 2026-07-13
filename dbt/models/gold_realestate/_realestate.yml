@@ -1,0 +1,75 @@
+version: 2
+
+# Gold tests for the real-estate domain. PK integrity on every dim/fact, enum
+# guards on the conformed categoricals, and referential integrity from leases to
+# both the property dimension and the shared customer SCD2 dimension.
+models:
+  - name: dim_property
+    description: "Property dimension — one row per real-estate asset."
+    columns:
+      - name: property_id
+        description: "Business key of the property."
+        tests:
+          - not_null
+          - unique
+      - name: property_type
+        tests:
+          - accepted_values:
+              values: ['RESIDENTIAL', 'COMMERCIAL', 'RETAIL', 'HOSPITALITY', 'MIXED_USE']
+
+  - name: fact_lease
+    description: "Lease fact — one row per lease agreement."
+    columns:
+      - name: lease_id
+        tests:
+          - not_null
+          - unique
+      - name: property_id
+        tests:
+          - relationships:
+              to: ref('dim_property')
+              field: property_id
+      - name: customer_id
+        tests:
+          - relationships:
+              to: ref('dim_customer_history')
+              field: customer_id
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['ACTIVE', 'EXPIRED', 'TERMINATED']
+
+  - name: fact_occupancy
+    description: "Daily occupancy fact — one row per occupancy_id."
+    columns:
+      - name: occupancy_id
+        tests:
+          - not_null
+          - unique
+
+  - name: fact_maintenance
+    description: "Maintenance work-order fact — one row per work_order_id."
+    columns:
+      - name: work_order_id
+        tests:
+          - not_null
+          - unique
+      - name: priority
+        tests:
+          - accepted_values:
+              values: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['OPEN', 'IN_PROGRESS', 'CLOSED']
+
+  - name: mart_property_underperformance
+    description: "Property underperformance answer surface for the AI agent."
+    columns:
+      - name: property_id
+        tests:
+          - not_null
+          - unique
+      - name: is_underperforming
+        tests:
+          - not_null

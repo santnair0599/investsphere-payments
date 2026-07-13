@@ -1,0 +1,61 @@
+version: 2
+
+# Gold — investment / treasury domain. Facts reference dim_asset; the mart is the
+# answer surface for the agent tool get_investment_risk_exposure(period).
+models:
+  - name: dim_asset
+    description: "Investment asset dimension (one row per asset_id)."
+    columns:
+      - name: asset_id
+        description: "Business key."
+        data_tests: [not_null, unique]
+      - name: asset_class
+        data_tests:
+          - accepted_values:
+              values: ["EQUITY", "REAL_ESTATE", "PRIVATE_EQUITY", "FIXED_INCOME", "INFRASTRUCTURE"]
+
+  - name: fact_asset_performance
+    description: "Asset valuation/return facts (asset_id, as_of_date)."
+    columns:
+      - name: performance_id
+        data_tests: [not_null, unique]
+      - name: asset_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_asset')
+              field: asset_id
+
+  - name: fact_risk_exposure
+    description: "Asset risk exposure facts (asset_id, as_of_date)."
+    columns:
+      - name: exposure_id
+        data_tests: [not_null, unique]
+      - name: asset_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_asset')
+              field: asset_id
+      - name: risk_rating
+        data_tests:
+          - accepted_values:
+              values: ["LOW", "MEDIUM", "HIGH"]
+
+  - name: fact_cashflow
+    description: "Asset cashflow facts (one row per cashflow_id)."
+    columns:
+      - name: cashflow_id
+        data_tests: [not_null, unique]
+      - name: cashflow_type
+        data_tests:
+          - accepted_values:
+              values: ["DIVIDEND", "COUPON", "CAPITAL_CALL", "DISTRIBUTION"]
+
+  - name: mart_investment_risk
+    description: "Per-asset latest-vs-prior risk snapshot; flags rising risk exposure."
+    columns:
+      - name: asset_id
+        data_tests: [not_null, unique]
+      - name: is_rising_risk
+        data_tests: [not_null]

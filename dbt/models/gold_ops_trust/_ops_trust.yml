@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: mart_pipeline_status
+    description: "Latest pipeline outcome per job/run_date (STARTED/SUCCESS/FAILED/PARTIAL)."
+    columns:
+      - name: run_id
+        data_tests: [not_null]
+      - name: status
+        data_tests:
+          - accepted_values:
+              values: ["STARTED", "RUNNING", "SUCCESS", "FAILED", "PARTIAL", "SKIPPED"]
+
+  - name: mart_dq_gate_status
+    description: "Per-source DQ gate outcome + quarantine rate for the latest run."
+    columns:
+      - name: source_table
+        data_tests: [not_null]
+      - name: dq_gate_passed
+        data_tests: [not_null]
+
+  - name: mart_source_freshness
+    description: "Per-source freshness vs 26h SLA."
+    columns:
+      - name: source_table
+        data_tests: [not_null]
+      - name: within_sla
+        data_tests: [not_null]
+
+  - name: mart_business_recommendation_trust
+    description: "Rolled-up trust level + confidence the AI agent gates recommendations on."
+    columns:
+      - name: trust_level
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["HIGH", "MEDIUM", "LOW"]
+      - name: confidence_score
+        data_tests: [not_null]

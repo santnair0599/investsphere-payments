@@ -1,0 +1,76 @@
+version: 2
+
+# Gold tests for the hospitality domain. PKs are not_null + unique; enums use
+# accepted_values; facts reference their dimension / the shared customer master.
+models:
+  - name: dim_hotel
+    description: "Hotel dimension (one row per hotel_id)."
+    columns:
+      - name: hotel_id
+        description: "Business key."
+        data_tests: [not_null, unique]
+
+  - name: fact_booking
+    description: "Hotel booking fact (one row per booking_id)."
+    columns:
+      - name: booking_id
+        description: "Business key."
+        data_tests: [not_null, unique]
+      - name: hotel_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_hotel')
+              field: hotel_id
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_customer_history')
+              field: customer_id
+      - name: channel
+        data_tests:
+          - accepted_values:
+              values: ["DIRECT", "OTA", "CORPORATE", "TRAVEL_AGENT"]
+      - name: status
+        data_tests:
+          - accepted_values:
+              values: ["CONFIRMED", "CANCELLED", "NO_SHOW"]
+
+  - name: fact_revenue
+    description: "Daily hotel revenue fact (grain: revenue_id)."
+    columns:
+      - name: revenue_id
+        description: "Business key."
+        data_tests: [not_null, unique]
+      - name: hotel_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_hotel')
+              field: hotel_id
+
+  - name: fact_guest_review
+    description: "Guest review/sentiment fact (one row per review_id)."
+    columns:
+      - name: review_id
+        description: "Business key."
+        data_tests: [not_null, unique]
+      - name: hotel_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_hotel')
+              field: hotel_id
+      - name: sentiment
+        data_tests:
+          - accepted_values:
+              values: ["POSITIVE", "NEUTRAL", "NEGATIVE"]
+
+  - name: mart_hotel_revenue_risk
+    description: "Per-hotel revenue-risk surface (latest 30d vs prior 30d)."
+    columns:
+      - name: hotel_id
+        data_tests: [not_null, unique]
+      - name: is_revenue_risk
+        data_tests: [not_null]

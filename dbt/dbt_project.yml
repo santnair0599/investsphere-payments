@@ -1,5 +1,5 @@
 name: investsphere_payments
-version: "1.0.0"
+version: "2.0.0"
 config-version: 2
 
 profile: investsphere_payments
@@ -20,6 +20,25 @@ models:
     gold:
       +materialized: table
       +schema: gold
-    gold_marts:
+
+    # ---- Enterprise business domains (Dubai Holding-style pivot) --------------
+    # Each domain writes to its own Unity Catalog schema. dims/facts are tables;
+    # mart_* are the business-question answer surfaces the AI agent's SQL tools hit.
+    gold_realestate:
       +materialized: table
-      +schema: gold_marts
+      +schema: gold_realestate
+    gold_hospitality:
+      +materialized: table
+      +schema: gold_hospitality
+    gold_entertainment:
+      +materialized: table
+      +schema: gold_entertainment
+    gold_investment:
+      +materialized: table
+      +schema: gold_investment
+    gold_customer:
+      +materialized: table
+      +schema: gold_customer
+    gold_ops_trust:
+      +materialized: table
+      +schema: gold_ops_trust

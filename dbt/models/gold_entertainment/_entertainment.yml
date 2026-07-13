@@ -1,0 +1,58 @@
+version: 2
+
+# Entertainment domain (venues/leisure): venue dimension, ticket-sales & footfall
+# facts, campaign-ROI fact, and the venue-conversion-risk mart the agent's
+# get_venue_conversion_risk(period) tool hits.
+models:
+  - name: dim_venue
+    description: "Venue dimension (one row per venue_id)."
+    columns:
+      - name: venue_id
+        description: "Business key."
+        data_tests: [not_null, unique]
+      - name: venue_type
+        data_tests:
+          - accepted_values:
+              values: ["THEME_PARK", "CINEMA", "ARENA", "MALL_ATTRACTION", "WATERPARK"]
+
+  - name: fact_ticket_sales
+    description: "Ticket sales fact (grain: ticket_id)."
+    columns:
+      - name: ticket_id
+        data_tests: [not_null, unique]
+      - name: venue_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_venue')
+              field: venue_id
+
+  - name: fact_footfall
+    description: "Venue footfall fact (grain: footfall_id)."
+    columns:
+      - name: footfall_id
+        data_tests: [not_null, unique]
+      - name: venue_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_venue')
+              field: venue_id
+
+  - name: fact_campaign_roi
+    description: "Marketing campaign spend/outcomes with ROI (grain: campaign_id + campaign_date)."
+    columns:
+      - name: campaign_id
+        data_tests: [not_null]
+      - name: channel
+        data_tests:
+          - accepted_values:
+              values: ["SOCIAL", "SEARCH", "EMAIL", "OOH", "INFLUENCER"]
+
+  - name: mart_venue_conversion_risk
+    description: "Per-venue 30-day-over-30-day footfall vs conversion; flags healthy-footfall/weak-conversion venues."
+    columns:
+      - name: venue_id
+        data_tests: [not_null, unique]
+      - name: is_conversion_risk
+        data_tests: [not_null]

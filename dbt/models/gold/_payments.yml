@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: fact_payments
+    description: "Payment transactions fact (grain: one row per payment_id)."
+    columns:
+      - name: payment_id
+        description: "Payment business key."
+        data_tests: [not_null, unique]
+      - name: customer_id
+        description: "FK to dim_customer(_history).customer_id."
+        data_tests: [not_null]
+      - name: amount
+        data_tests: [not_null]
+      - name: currency_code
+        data_tests:
+          - accepted_values:
+              values: ["AED", "USD", "EUR", "GBP", "INR", "SAR"]
+
+  - name: mart_daily_payment_summary
+    description: "Daily payment volume/value by currency and payment type."
+    columns:
+      - name: transaction_date
+        data_tests: [not_null]

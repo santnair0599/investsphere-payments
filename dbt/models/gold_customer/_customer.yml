@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: dim_customer_segment
+    description: "Customer segment dimension (one row per CRM segment) with representative industry/region and account counts."
+    columns:
+      - name: segment
+        description: "CRM segment (grain / PK)."
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              values: ["RETAIL", "CORPORATE", "HNW", "TOURIST", "GOVERNMENT"]
+
+  - name: fact_customer_activity
+    description: "Deal-pipeline + contact activity per segment per month. Grain: segment x activity_month."
+    columns:
+      - name: segment
+        data_tests: [not_null]
+      - name: activity_month
+        data_tests: [not_null]
+
+  - name: fact_customer_sentiment
+    description: "Guest-review sentiment attributed to a segment per month. Grain: segment x review_month."
+    columns:
+      - name: segment
+        data_tests: [not_null]
+      - name: review_month
+        data_tests: [not_null]
+
+  - name: mart_declining_customer_segments
+    description: "Latest-vs-prior-month decline signals per segment; answer surface for get_declining_customer_segments(period)."
+    columns:
+      - name: segment
+        data_tests: [not_null, unique]
+      - name: is_declining
+        data_tests: [not_null]
