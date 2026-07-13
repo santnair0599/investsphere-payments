@@ -1,0 +1,25 @@
+# Azure GenAI plane runtime (Container App image). Pinned loosely for the demo.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+openai>=1.40                     # Azure OpenAI client
+langgraph>=0.2                   # real StateGraph runtime (ai/app/agent_langgraph.py); AGENT_RUNTIME=langgraph
+azure-search-documents>=11.5     # Azure AI Search (hybrid + semantic)
+azure-identity>=1.17             # managed identity / Key Vault
+azure-keyvault-secrets>=4.8
+azure-ai-projects>=1.0.0b7       # Foundry project client (agent provisioning)
+azure-ai-agents>=1.0.0b3         # Foundry Agent Service tool models
+pyyaml>=6.0                      # parse ai/foundry/agent_config.yaml
+databricks-sql-connector>=3.4    # read-only Gold mart queries
+
+# ---- Azure-native evaluation & observability (used when creds configured; ------
+# all imported lazily so local/CI validation works without them installed) --------
+azure-ai-evaluation>=1.0.0        # groundedness / relevance / retrieval / tool-call / task-adherence
+azure-monitor-opentelemetry>=1.6  # App Insights exporter for OpenTelemetry traces
+opentelemetry-api>=1.27           # tracing spans (agent run / LLM call / tool call)
+azure-ai-contentsafety>=1.0       # Prompt Shields (jailbreak/injection detection)
+azure-ai-textanalytics>=5.3       # Azure AI Language — sentiment enrichment (ai/enrichment/)
+
+# ---- optional: MCP interoperability server (ai/mcp/) — NOT needed for the ------
+# Azure Foundry / FastAPI production runtime. Install only to run the MCP server.
+mcp>=1.2                          # Model Context Protocol SDK (stdio server)

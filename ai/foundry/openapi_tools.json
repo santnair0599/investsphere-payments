@@ -1,0 +1,544 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "InvestSphere Business Marts Tools",
+    "version": "1.0.0",
+    "description": "Governed KPI/risk queries over Databricks Gold marts, exposed as OpenAPI operations for the Azure AI Foundry agent. Generated from ai/tools/business_tools.TOOL_SPECS \u2014 do not edit by hand; run `python -m ai.foundry.build_openapi_tools`."
+  },
+  "servers": [
+    {
+      "url": "https://REPLACE_WITH_CONTAINER_APP_FQDN",
+      "description": "Azure Container App ingress (FastAPI)."
+    }
+  ],
+  "paths": {
+    "/tools/get_underperforming_properties": {
+      "post": {
+        "operationId": "get_underperforming_properties",
+        "summary": "Real-estate assets with falling occupancy and/or rising maintenance cost.",
+        "description": "Real-estate assets with falling occupancy and/or rising maintenance cost.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "period": {
+                    "type": "string",
+                    "enum": [
+                      "last_30_days",
+                      "last_month",
+                      "last_week",
+                      "this_month",
+                      "this_week"
+                    ],
+                    "description": "Reporting period window. Omit to use the tool default.",
+                    "example": "this_week"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Structured rows from the governed Gold mart.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mart": {
+                      "type": "string",
+                      "description": "Governed Gold mart the rows came from."
+                    },
+                    "row_count": {
+                      "type": "integer"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managed_identity": []
+          }
+        ]
+      }
+    },
+    "/tools/get_hotel_revenue_risk": {
+      "post": {
+        "operationId": "get_hotel_revenue_risk",
+        "summary": "Hotels with revenue risk (RevPAR/occupancy decline or poor guest sentiment).",
+        "description": "Hotels with revenue risk (RevPAR/occupancy decline or poor guest sentiment).",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "period": {
+                    "type": "string",
+                    "enum": [
+                      "last_30_days",
+                      "last_month",
+                      "last_week",
+                      "this_month",
+                      "this_week"
+                    ],
+                    "description": "Reporting period window. Omit to use the tool default.",
+                    "example": "this_week"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Structured rows from the governed Gold mart.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mart": {
+                      "type": "string",
+                      "description": "Governed Gold mart the rows came from."
+                    },
+                    "row_count": {
+                      "type": "integer"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managed_identity": []
+          }
+        ]
+      }
+    },
+    "/tools/get_venue_conversion_risk": {
+      "post": {
+        "operationId": "get_venue_conversion_risk",
+        "summary": "Entertainment venues with high/rising footfall but weak ticket conversion.",
+        "description": "Entertainment venues with high/rising footfall but weak ticket conversion.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "period": {
+                    "type": "string",
+                    "enum": [
+                      "last_30_days",
+                      "last_month",
+                      "last_week",
+                      "this_month",
+                      "this_week"
+                    ],
+                    "description": "Reporting period window. Omit to use the tool default.",
+                    "example": "this_week"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Structured rows from the governed Gold mart.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mart": {
+                      "type": "string",
+                      "description": "Governed Gold mart the rows came from."
+                    },
+                    "row_count": {
+                      "type": "integer"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managed_identity": []
+          }
+        ]
+      }
+    },
+    "/tools/get_investment_risk_exposure": {
+      "post": {
+        "operationId": "get_investment_risk_exposure",
+        "summary": "Investment assets with rising risk exposure or breached risk thresholds.",
+        "description": "Investment assets with rising risk exposure or breached risk thresholds.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "period": {
+                    "type": "string",
+                    "enum": [
+                      "last_30_days",
+                      "last_month",
+                      "last_week",
+                      "this_month",
+                      "this_week"
+                    ],
+                    "description": "Reporting period window. Omit to use the tool default.",
+                    "example": "this_week"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Structured rows from the governed Gold mart.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mart": {
+                      "type": "string",
+                      "description": "Governed Gold mart the rows came from."
+                    },
+                    "row_count": {
+                      "type": "integer"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managed_identity": []
+          }
+        ]
+      }
+    },
+    "/tools/get_declining_customer_segments": {
+      "post": {
+        "operationId": "get_declining_customer_segments",
+        "summary": "Customer segments with declining activity, revenue, or sentiment.",
+        "description": "Customer segments with declining activity, revenue, or sentiment.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "period": {
+                    "type": "string",
+                    "enum": [
+                      "last_30_days",
+                      "last_month",
+                      "last_week",
+                      "this_month",
+                      "this_week"
+                    ],
+                    "description": "Reporting period window. Omit to use the tool default.",
+                    "example": "this_week"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Structured rows from the governed Gold mart.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mart": {
+                      "type": "string",
+                      "description": "Governed Gold mart the rows came from."
+                    },
+                    "row_count": {
+                      "type": "integer"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managed_identity": []
+          }
+        ]
+      }
+    },
+    "/tools/get_top_business_actions": {
+      "post": {
+        "operationId": "get_top_business_actions",
+        "summary": "Cross-domain ranked list of assets/segments needing leadership attention.",
+        "description": "Cross-domain ranked list of assets/segments needing leadership attention.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "period": {
+                    "type": "string",
+                    "enum": [
+                      "last_30_days",
+                      "last_month",
+                      "last_week",
+                      "this_month",
+                      "this_week"
+                    ],
+                    "description": "Reporting period window. Omit to use the tool default.",
+                    "example": "this_week"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Structured rows from the governed Gold mart.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mart": {
+                      "type": "string",
+                      "description": "Governed Gold mart the rows came from."
+                    },
+                    "row_count": {
+                      "type": "integer"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managed_identity": []
+          }
+        ]
+      }
+    },
+    "/tools/get_pipeline_status": {
+      "post": {
+        "operationId": "get_pipeline_status",
+        "summary": "Latest data-pipeline run status; explains why a run was PARTIAL/FAILED.",
+        "description": "Latest data-pipeline run status; explains why a run was PARTIAL/FAILED.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "run_date": {
+                    "type": "string",
+                    "description": "Pipeline run date as YYYY-MM-DD. Omit for the latest run.",
+                    "example": "2026-07-05"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Structured rows from the governed Gold mart.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mart": {
+                      "type": "string",
+                      "description": "Governed Gold mart the rows came from."
+                    },
+                    "row_count": {
+                      "type": "integer"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managed_identity": []
+          }
+        ]
+      }
+    },
+    "/tools/get_data_quality_trust_score": {
+      "post": {
+        "operationId": "get_data_quality_trust_score",
+        "summary": "Trust level + confidence for today's data; call before giving a recommendation.",
+        "description": "Trust level + confidence for today's data; call before giving a recommendation.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "run_date": {
+                    "type": "string",
+                    "description": "Pipeline run date as YYYY-MM-DD. Omit for the latest run.",
+                    "example": "2026-07-05"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Structured rows from the governed Gold mart.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mart": {
+                      "type": "string",
+                      "description": "Governed Gold mart the rows came from."
+                    },
+                    "row_count": {
+                      "type": "integer"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managed_identity": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "managed_identity": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Azure Managed Identity token issued to the Foundry agent's OpenAPI tool connection; validated by API Management / the Container App ingress. No API key is stored in this document."
+      }
+    }
+  },
+  "security": [
+    {
+      "managed_identity": []
+    }
+  ]
+}

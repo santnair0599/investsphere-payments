@@ -1,0 +1,48 @@
+# Azure AI Foundry Agent Service definition — the managed-runtime twin of the
+# LangGraph/FastAPI agent. Same system prompt, same tool surface. Interviewers for
+# "Azure AI Engineer / Foundry" roles see this; "AI Agent Engineer / GenAI" roles
+# see the LangGraph version. Both call the SAME governed Gold marts.
+#
+# Provision via the Azure AI Projects SDK / azd (see ai/foundry/README.md).
+
+name: investsphere-enterprise-decision-agent
+model: ${AZURE_OPENAI_DEPLOYMENT}          # e.g. gpt-4o
+description: >
+  Enterprise business decision agent for a diversified holding company
+  (real estate, hospitality, entertainment, investment). Grounded on governed
+  Databricks Gold marts + policy RAG; trust-gated; PII-guarded.
+
+instructions_file: ../app/system_prompt.md
+
+# Tools exposed to the Foundry agent. Business tools are OpenAPI operations on the
+# FastAPI app (Container App); policy search is an Azure AI Search knowledge tool.
+tools:
+  - type: openapi
+    name: business_marts
+    description: Governed KPI/risk queries over Databricks Gold marts.
+    spec: ./openapi_tools.json          # generated from ai/tools/business_tools TOOL_SPECS
+    auth: managed_identity
+
+  - type: azure_ai_search
+    name: search_policy_docs
+    description: Business policy + KPI-definition retrieval (hybrid + semantic).
+    index: ${AZURE_SEARCH_INDEX}
+    query_type: semantic
+    top_k: 4
+
+  - type: content_safety                 # Prompt Shields + PII + jailbreak filters
+    name: guardrails
+    prompt_shield: true
+    pii_detection: true
+
+# Content Safety severity gates (defence in depth with ai/guardrails/guardrails.py)
+content_safety:
+  hate: 2
+  violence: 2
+  self_harm: 2
+  sexual: 2
+  jailbreak: block
+
+observability:
+  tracing: application_insights
+  evaluations: ${AZURE_AI_PROJECT}       # Foundry eval runs write here
