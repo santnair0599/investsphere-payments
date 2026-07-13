@@ -1,4 +1,38 @@
-# InvestSphere Payments — Financial Services Data Platform on Azure Databricks
+# InvestSphere — Enterprise Business AI Decision Agent on Azure Databricks
+
+> **This project has evolved** from a payments platform into a **Dubai Holding-style
+> diversified enterprise** lakehouse (real estate, hospitality, entertainment,
+> investment, customer) **+ an Azure AI Foundry / LangGraph decision agent** on top.
+> See **[docs/ENTERPRISE_PIVOT.md](docs/ENTERPRISE_PIVOT.md)** (design contract),
+> **[docs/GENAI_INTERVIEW_STORY.md](docs/GENAI_INTERVIEW_STORY.md)** (the pitch),
+> **[docs/MODEL_SELECTION.md](docs/MODEL_SELECTION.md)** (how/why we chose the model),
+> **[docs/RAG_RUNBOOK.md](docs/RAG_RUNBOOK.md)** (RAG build sequence) +
+> **[docs/INTERVIEW_PREP_GENAI.md](docs/INTERVIEW_PREP_GENAI.md)** (concept prep map),
+> **[docs/CICD_SETUP.md](docs/CICD_SETUP.md)** + **[ai/README_ENHANCEMENTS.md](ai/README_ENHANCEMENTS.md)**
+> (delivery pipeline + AI enhancements 6–12), and
+> the **[`ai/`](ai/)** GenAI plane. The six ingestion patterns and the whole
+> engineering foundation (SCD2, DQ gates, quarantine, control tables, governance) are
+> preserved — only the business domain changed. The description below covers the
+> data-platform foundation.
+>
+> **Agent runtimes:** the agent runs on one of two interchangeable runtimes (select via
+> `AGENT_RUNTIME`) over the same tools/guardrails/trust/observability layer — a
+> dependency-light **Azure OpenAI SDK loop** (`raw`, default) and a **real LangGraph
+> `StateGraph`** (`langgraph`, `ai/app/agent_langgraph.py`; proven by
+> `python -m ai.app.verify_langgraph`). The **Azure AI Foundry twin** exposes the same
+> tools as **OpenAPI operations**.
+>
+> **Scope note:** the current production design focuses on **Azure AI Foundry, Azure
+> OpenAI, Azure AI Search RAG, Databricks SQL tool calling, guardrails, evaluation, and
+> observability**. The following are documented as *optional / future extensions* and are
+> intentionally not part of the production runtime:
+> [Fine-tuning](docs/FINE_TUNING_STRATEGY.md) ·
+> [Multimodal / vision](docs/MULTIMODAL_EXTENSION.md) ·
+> [MCP interoperability server](docs/MCP_EXTENSION.md) (`ai/mcp/` — optional, separate from the
+> Foundry/FastAPI runtime) ·
+> [Multi-agent split](docs/MULTI_AGENT_EXTENSION.md) (docs only; the product stays single-agent).
+
+---
 
 A governed, multi-source **lakehouse** for investment & payments data:
 six Bronze sources → Silver (CDC/SCD2, DQ, quarantine) → **dbt Gold** → a **Power BI**
@@ -75,7 +109,7 @@ flowchart LR
 | | **CDC apply: SCD2 & SCD1** — hash change-detect, soft-delete, out-of-order + duplicate handling | `silver/cdc_apply.py` |
 | **Gold** | dbt: `dim_customer` (+history), `fact_payments`, `daily_payment_summary` + tests | `dbt/` |
 | **Governance** | PII tags, 5 groups, least-privilege grants, column masks, row filters, masked views — policy-as-code → UC SQL | `governance/` · [GOVERNANCE](docs/GOVERNANCE.md) |
-| **Orchestration** | 15-task `daily_e2e` DAG: parallel Bronze → gate → Silver → DQ gate → dbt → governance → publish | `orchestration/` · [ORCHESTRATION](docs/ORCHESTRATION.md) |
+| **Orchestration** | 22-task `daily_e2e` DAG: parallel Bronze → gate → Silver → DQ gate → dbt → governance → publish | `orchestration/` · [ORCHESTRATION](docs/ORCHESTRATION.md) |
 | **Monitoring & cost** | 9 control/monitoring models, 9 alert rules, 6 Databricks SQL dashboards; **live gate/pipeline audit** in `silver_control` | `monitoring/` · [MONITORING](docs/MONITORING.md) · [GATE_MONITORING](docs/GATE_MONITORING.md) |
 | **Performance/scale** | synthetic data, stage benchmarks, cost estimation, table-health, 8 optimization recs | `perf/` · [PERFORMANCE_COST](docs/PERFORMANCE_COST.md) |
 | **BI** | 3 analyst-safe serving views + semantic model (measures/dimensions/RLS) for Power BI | `bi/` · [POWER_BI](docs/POWER_BI.md) |
@@ -211,7 +245,7 @@ src/payments_platform/
 pipelines/                  Databricks task entry-point (dag_task) + policy-as-code SQL generators + deploy preflight/smoke
 scripts/                    deploy_bundle.sh · deploy_sql.sh (ordered governance→BI→monitoring)
 infra/terraform/            Azure + UC + identity + compute + secrets (modules + dev/test/prod + outputs)
-databricks.yml              Asset Bundle: dev/test/prod targets · daily_e2e (15 tasks) · smoke job
+databricks.yml              Asset Bundle: dev/test/prod targets · daily_e2e (22 tasks) · smoke job
 bundle_vars/                per-target bundle var values (from terraform output)
 dbt/                        Gold: staging → dim/fact → marts + tests
 seeds/ · docker/            sample inputs · local source stack

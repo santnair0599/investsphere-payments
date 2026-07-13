@@ -1,8 +1,13 @@
 # Monitoring & control
 
-The monitoring layer (`src/payments_platform/monitoring/`) is **observability as
-policy-as-code**: nine declarative models, a pure-Python recorder that writes them
-deterministically, declarative alert rules, and Databricks SQL dashboard queries.
+> This project evolved from a payments-practice foundation into an enterprise business AI decision platform. The original ingestion and lakehouse patterns were preserved and generalized across enterprise domains.
+
+The monitoring layer (`src/payments_platform/monitoring/` — internal package name)
+is **observability as policy-as-code**: nine declarative models, a pure-Python
+recorder that writes them deterministically, declarative alert rules, and
+Databricks SQL dashboard queries. It covers the **six domain conformers**
+(real-estate, hospitality, entertainment, investment, customer/guest) plus the
+`gold_ops_trust` trust marts that feed the decision agent.
 It is **additive** — nothing in `orchestration/` changed; the monitor *wraps* the
 existing DAG.
 
@@ -50,6 +55,11 @@ dbt_build / dbt_test  -> dbt_results
 governance_validation -> security_events (violations -> VIOLATION)
 publish / run end     -> pipeline_run finalised SUCCESS / FAILED / PARTIAL
 ```
+
+Example domain DQ failures the Silver gate records/quarantines: a property with
+`occupancy_rate > 1`, negative hotel `revenue`, an out-of-range guest `rating`, or
+an invalid asset `currency` — each becomes a FAIL `dq_results` row for its entity
+and a quarantined record, never silently dropped.
 
 **Final status:** `FAILED` if any task hard-failed; `PARTIAL` if a gate blocked
 downstream (SKIPPED) with no hard failure; otherwise `SUCCESS`. A normal,

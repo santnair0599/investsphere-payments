@@ -1,5 +1,7 @@
 # Salesforce ingestor
 
+> This project evolved from a payments-practice foundation into an enterprise business AI decision platform. The original ingestion and lakehouse patterns were preserved and generalized across enterprise domains.
+
 `bronze/salesforce_ingest.py` lands Salesforce objects into Bronze. Pure-Python
 and testable: the API is abstracted behind a client (`query(object, since,
 include_deleted) -> [records]`), so a caller can inject an in-memory org (the smoke test does); in production
@@ -18,8 +20,16 @@ Loaded with `source_config.load_configs(path, SALESFORCE_REQUIRED_KEYS)`:
 }
 ```
 
-Configure one entry per object (Account / Contact / Opportunity / …);
-`watermark_column` is `SystemModstamp` or `LastModifiedDate`.
+Configure one entry per object (Account / Contact / Opportunity / Case);
+`watermark_column` is `SystemModstamp` or `LastModifiedDate`. The enterprise CRM
+maps the standard objects onto the business domains:
+
+| Object | Bronze table | Business meaning |
+|---|---|---|
+| Account | `bronze.sfdc_account` | customer segment / company |
+| Contact | `bronze.sfdc_contact` | customer / guest |
+| Opportunity | `bronze.sfdc_opportunity` | deal / leasing pipeline |
+| Case | `bronze.sfdc_case` | guest review / sentiment |
 
 ## Behaviour
 

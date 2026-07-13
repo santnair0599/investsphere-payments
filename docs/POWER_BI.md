@@ -1,10 +1,14 @@
 # Power BI / BI consumption layer
 
+> This project evolved from a payments-practice foundation into an enterprise business AI decision platform. The original ingestion and lakehouse patterns were preserved and generalized across enterprise domains.
+
 The serving layer Power BI (or any BI tool) connects to. It is **policy-as-code**
-(`src/payments_platform/bi/`): a declarative semantic model + generated serving
-views that are **analyst-safe by construction** — every dataset sources a Gold
-mart, a governance masked view, or the non-PII fact, so Power BI inherits Unity
-Catalog masking and the region row filter automatically.
+(`src/payments_platform/bi/` — internal package name): a declarative semantic
+model + generated serving views that are **analyst-safe by construction** — every
+dataset sources an enterprise-domain Gold mart, a governance masked view, or a
+non-PII fact, so Power BI inherits Unity Catalog masking and the region row filter
+automatically. Datasets serve the domain KPIs — **occupancy / RevPAR, footfall &
+conversion, asset risk, and customer-segment activity** — not raw transactions.
 
 ```
 src/payments_platform/bi/
@@ -26,25 +30,34 @@ Gold base:
 
 | BI view (`gold_marts.*`) | Sources | Why it's safe |
 |---|---|---|
-| `v_payments_daily_bi` | `gold_marts.daily_payment_summary` | pre-aggregated mart, no PII |
-| `v_payments_fact_bi` | `gold.fact_payments` (+ `dim_customer.nationality` for RLS) | fact has no PII |
-| `v_customer_bi` | `gold_masked.v_customer_masked_for_analytics` | PII already display-masked |
+| hospitality revenue / RevPAR | `gold_hospitality.mart_hotel_revenue_risk` | pre-aggregated mart, no PII |
+| property occupancy | `gold_realestate.fact_occupancy` (+ `dim_customer.nationality` for RLS) | fact has no PII |
+| venue footfall / conversion | `gold_entertainment.mart_venue_conversion_risk` | pre-aggregated mart, no PII |
+| investment asset risk | `gold_investment.mart_investment_risk` | pre-aggregated mart, no PII |
+| customer-segment activity | `gold_customer.mart_declining_customer_segments` | segment-level, no PII |
+| customer dimension | `gold_masked.v_customer_masked_for_analytics` | PII already display-masked |
 
 `validate.py` proves no view exposes a raw PII column and none sources a PII base
 table (`gold.dim_customer` / `silver_cdc.customer_scd2`).
 
+> The reference `bi/` generator currently emits internal view names carried over
+> from the foundation (e.g. `v_payments_daily_bi`, `v_customer_bi` — internal
+> names); the **datasets they serve are the enterprise domain marts above**. The
+> generator is repointed per domain without changing the analyst-safe pattern.
+
 ## Semantic model (`bi/measures.json`)
 
-**Measures (KPIs):** `total_payment_amount` (SUM), `payment_count` (SUM),
-`avg_payment_amount` (AVG), `active_customers` (DISTINCTCOUNT), `distinct_currencies`.
-**Dimensions:** transaction_date, currency, payment_type, customer_country,
-customer_status. Each measure/dimension is validated to reference a real column in
-its dataset. Import `bi/measures.json` to scaffold the Power BI dataset; the
-measures translate directly to DAX, e.g.:
+**Measures (KPIs):** `total_hotel_revenue` (SUM), `revpar` (revenue per available
+room), `avg_occupancy_rate` (AVG), `total_footfall` (SUM), `conversion_rate`,
+`active_customers` (DISTINCTCOUNT). **Dimensions:** business_date, domain,
+property/hotel/venue, customer_country, customer_segment. Each measure/dimension is
+validated to reference a real column in its dataset. Import `bi/measures.json` to
+scaffold the Power BI dataset; the measures translate directly to DAX, e.g.:
 
 ```DAX
-Total Payment Amount = SUM(v_payments_daily_bi[total_amount])
-Active Customers      = DISTINCTCOUNT(v_payments_fact_bi[customer_id])
+Total Hotel Revenue = SUM(v_hotel_revenue_bi[total_revenue])
+Avg Occupancy Rate  = AVERAGE(v_occupancy_bi[occupancy_rate])
+Active Customers    = DISTINCTCOUNT(v_customer_bi[customer_id])
 ```
 
 ## Connecting Power BI to Databricks
@@ -103,5 +116,6 @@ of the data. Three principles:
 
 Performance levers (see also [PERFORMANCE_COST.md](PERFORMANCE_COST.md)): serve
 pre-aggregated marts to keep dashboard queries cheap, DirectQuery against a
-**Photon** SQL warehouse, and **Liquid Clustering** on the large fact so BI filter
-predicates (date / currency / country) prune efficiently.
+**Photon** SQL warehouse, and **Liquid Clustering** on the large facts
+(`fact_occupancy`, `fact_asset_performance`) so BI filter predicates
+(date / domain / country) prune efficiently.

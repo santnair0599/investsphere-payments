@@ -1,8 +1,15 @@
 # Orchestration — `investsphere_payments_daily_e2e`
 
+> This project evolved from a payments-practice foundation into an enterprise
+> business AI decision platform. The original ingestion and lakehouse patterns were
+> preserved and generalized across enterprise domains (real estate, hospitality,
+> entertainment, investment, customer/CRM, ops-trust).
+
 The full daily workflow, deployed as a **Databricks Asset Bundle** job
-(`databricks.yml`) and modelled as testable policy-as-code
-(`src/payments_platform/orchestration/`).
+(`databricks.yml`, bundle name `investsphere_payments` — internal name, retained from
+the payments-practice origin) and modelled as testable policy-as-code
+(`src/payments_platform/orchestration/`). The six Bronze sources fan out across the
+enterprise domains; the medallion, gates, SCD2, and dbt Gold structure is unchanged.
 
 ```
 init_run
@@ -91,12 +98,15 @@ the forward watermark**, so daily runs are unaffected.
 
 ### Active Bronze sources
 
-All six Bronze sources are now active and fan out in parallel under `init_run`:
-`bronze_payments_file`, `bronze_jdbc` (Oracle/SQL Server For-Each),
-`bronze_customer_cdc` (Debezium), and the newly-enabled
-**`bronze_rest_api`** ([REST_INGEST](REST_INGEST.md)),
-**`bronze_sftp`** ([SFTP_INGEST](SFTP_INGEST.md)), and
-**`bronze_salesforce`** ([SALESFORCE_INGEST](SALESFORCE_INGEST.md)).
+All six Bronze sources are now active and fan out in parallel under `init_run`, each
+carrying one enterprise domain's payload:
+`bronze_payments_file` (Auto Loader file drop — the retained payments-practice file
+path, kept as one domain, plus marketing/campaign exports),
+`bronze_jdbc` (Oracle real-estate PMS + SQL Server treasury/risk, For-Each),
+`bronze_customer_cdc` (Debezium customer/guest master → SCD2), and the
+**`bronze_rest_api`** (hospitality bookings + FX, [REST_INGEST](REST_INGEST.md)),
+**`bronze_sftp`** (entertainment ticketing/footfall, [SFTP_INGEST](SFTP_INGEST.md)), and
+**`bronze_salesforce`** (enterprise CRM, [SALESFORCE_INGEST](SALESFORCE_INGEST.md)).
 
 `bronze_validation_gate` depends only on the **required** sources
 (`payments_file`, `customer_cdc`) — the REST/SFTP/Salesforce tasks are not gate

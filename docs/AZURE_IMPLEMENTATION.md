@@ -1,35 +1,50 @@
 # Azure Databricks implementation — step by step
 
+> This project evolved from a payments-practice foundation into an enterprise
+> business AI decision platform. The original ingestion and lakehouse patterns were
+> preserved and generalized across enterprise domains (real estate, hospitality,
+> entertainment, investment, customer/CRM, ops-trust).
+
 A follow-along runbook to take this repo from local reference to a **running Azure
-Databricks pipeline**, staged. This milestone does the **file-based path only**,
-end to end:
+Databricks pipeline**, staged. This milestone lights up **one domain end to end via
+the file path only** — the original payments-practice file slice, retained as one
+domain and the simplest place to start. The other five enterprise sources follow the
+same pattern (see [What's next](#whats-next)):
 
 ```
-payments CSV in a UC Volume
+a CSV file drop in a UC Volume  (retained payments-practice file path)
    → Auto Loader → investsphere_dev.bronze.payments_file
    → Spark Silver (DQ/quarantine/dedup/MERGE) → investsphere_dev.silver_clean.payment_clean
-   → dbt (MERGE) → investsphere_dev.gold.fact_payments
+   → dbt (MERGE) → enterprise Gold marts (gold_* schemas)
 ```
 
-The other sources (JDBC/CDC/REST/SFTP/Salesforce) stay as stubs and are added
-later — see [What's next](#whats-next).
+The other five enterprise sources (JDBC real-estate/treasury, customer CDC, REST
+hospitality+FX, SFTP entertainment, Salesforce CRM) are enabled the same way — see
+[What's next](#whats-next).
 
 ## What's already done in the repo ✓
 
-You do **not** need to write the Spark code — it's implemented and tested:
+You do **not** need to write the Spark code — it's implemented and tested. The Auto
+Loader + Silver modules below still carry their original `payments` names (the
+retained payments-practice path, kept as one domain); the enterprise conformers
+(`silver_realestate`, `silver_hospitality`, `silver_entertainment`,
+`silver_investment`, `silver_customer`) follow the identical parse→DQ→MERGE shape:
 
 - `src/payments_platform/databricks/bronze_payments_autoloader.py` — real Auto Loader.
 - `src/payments_platform/databricks/silver_payments.py` — parse → DQ → quarantine
   (`silver_quarantine.failed_records`) → dedup → **Delta MERGE** into
   `silver_clean.payment_clean`.
 - `pipelines/dag_task.py` — dispatches every task to a real module: all six Bronze
-  sources, `silver_payments`, `silver_customer_scd2`, and both validation gates.
-- `databricks.yml` — passes `--catalog` to each task; dbt builds the full Gold graph.
+  sources, the six Silver domain conformers, `silver_customer_scd2`, and both
+  validation gates.
+- `databricks.yml` — the `investsphere_payments` bundle (internal name, retained from
+  the payments-practice origin) passes `--catalog` to each task; dbt builds the full
+  enterprise Gold graph (the six `gold_*` mart schemas).
 - `dbt/` — `sources.yml` + `dbt_project.yml` read/write the catalog from a var.
 
-The whole `daily_e2e` job runs on real Spark end to end (this runbook uses the file
-path as the simplest starting point; land the other sources' inputs / secrets to
-light them up — see the source-specific ingest docs).
+The whole `daily_e2e` job runs on real Spark end to end (this runbook uses the
+retained file path as the simplest starting point; land the other enterprise sources'
+inputs / secrets to light them up — see the source-specific ingest docs).
 
 ## Phase 0 — Azure prerequisites (one-time, in Azure)
 
@@ -105,14 +120,16 @@ databricks bundle run investsphere_payments_daily_e2e -t dev
 Then verify the medallion actually materialised:
 
 ```sql
-SELECT count(*), min(ingestion_timestamp) FROM investsphere_dev.bronze.payments_file;
-SELECT count(*) FROM investsphere_dev.silver_clean.payment_clean;          -- valid, deduped
-SELECT * FROM investsphere_dev.silver_quarantine.failed_records LIMIT 20;   -- bad rows w/ context
-SELECT * FROM investsphere_dev.gold.fact_payments LIMIT 20;                 -- dbt MERGE output
+SELECT count(*), min(ingestion_timestamp) FROM investsphere_dev.bronze.payments_file;  -- retained file slice
+SELECT count(*) FROM investsphere_dev.silver_clean.payment_clean;             -- valid, deduped
+SELECT * FROM investsphere_dev.silver_quarantine.failed_records LIMIT 20;      -- bad rows w/ context
+SELECT * FROM investsphere_dev.gold_ops_trust.mart_pipeline_status LIMIT 20;   -- dbt Gold output (trust mart)
+-- domain marts (gold_realestate.mart_property_underperformance, gold_hospitality.mart_hotel_revenue_risk, …)
+-- populate as their enterprise sources are lit up.
 ```
 
-You should see the quarantine table capture the invalid rows (negative amount /
-bad currency / missing key) and `payment_clean` hold the valid, de-duplicated set.
+You should see the quarantine table capture the invalid rows (a failed DQ rule /
+bad type / missing key) and `payment_clean` hold the valid, de-duplicated set.
 
 ### If serverless streaming complains
 
@@ -133,23 +150,27 @@ repo, so imports resolve. To do it the production-correct way, uncomment the whe
 ## Idempotency / re-runs
 
 - Bronze Auto Loader is checkpointed — re-running only ingests **new** files.
-- Silver **MERGE**es on `payment_id`, so re-runs upsert (no duplicates).
-- dbt `fact_payments` is incremental (`unique_key='payment_id'`) → **MERGE**.
+- Silver **MERGE**es on the record key, so re-runs upsert (no duplicates).
+- dbt Gold marts are incremental (keyed `unique_key`) → **MERGE**.
 
 To reprocess from scratch in dev: `DROP` the three tables + delete the checkpoint
 Volume folder, re-upload the file, re-run.
 
 ## What's next
 
-Add each remaining source the same way — a real module under
+Add each remaining enterprise source the same way — a real module under
 `databricks/`, wired into `dag_task.py`, with `--catalog` on its bundle task:
 
 1. **Customer CDC → SCD2** — `spark.readStream` from Kafka (or a CDC feed table) →
    `silver_customer_scd2` via **AUTO CDC** (`apply_changes ... SEQUENCE BY ...
    STORED AS SCD TYPE 2`) or `foreachBatch` + MERGE. Then **widen the dbt selector**
-   back to `staging gold gold_marts` (dim_customer + daily_payment_summary need it).
-2. **JDBC** (Oracle/SQL Server) — Spark JDBC read with the watermark predicate.
-3. **REST / SFTP / Salesforce** — Spark equivalents of the reference ingestors.
+   to the full enterprise Gold graph (the `gold_customer` dim + domain marts need it).
+2. **JDBC** — Oracle real-estate PMS (`oracle_properties/leases/occupancy_daily/
+   maintenance_orders`) and SQL Server treasury/risk (`sqlserver_assets/
+   asset_performance/risk_exposure/cashflow`) via Spark JDBC with the watermark predicate.
+3. **REST / SFTP / Salesforce** — Spark equivalents of the reference ingestors:
+   REST hospitality bookings + FX rates, SFTP entertainment ticketing/footfall,
+   Salesforce CRM (`sfdc_account/contact/opportunity/case`).
 4. **Monitoring/control rows** — write `silver_control.*` / `monitoring.*` from the
    tasks (the `RunMonitor` contract).
 5. **Real gates** — replace the stubbed gate task values with actual checks over

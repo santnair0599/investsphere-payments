@@ -1,7 +1,12 @@
 # Terraform — platform foundation
 
+> This project evolved from a payments-practice foundation into an enterprise
+> business AI decision platform. The original ingestion and lakehouse patterns were
+> preserved and generalized across enterprise domains (real estate, hospitality,
+> entertainment, investment, customer/CRM, ops-trust).
+
 The `infra/terraform/` layer provisions the **production platform foundation** for
-InvestSphere Payments on Azure Databricks: the Azure resources, Unity Catalog
+the InvestSphere enterprise lakehouse on Azure Databricks: the Azure resources, Unity Catalog
 catalog/schemas/grants, identity groups, compute policy + SQL warehouse, and the
 Key Vault-backed secret scope. It is **additive** — it provisions *where* the
 platform runs; the application code, jobs, and DLT/dbt pipelines are deployed

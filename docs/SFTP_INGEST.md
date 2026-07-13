@@ -1,6 +1,10 @@
 # SFTP / vendor-file ingestor
 
+> This project evolved from a payments-practice foundation into an enterprise business AI decision platform. The original ingestion and lakehouse patterns were preserved and generalized across enterprise domains.
+
 `bronze/sftp_ingest.py` copies vendor files delivered over SFTP into Bronze.
+The onboarded feed is the **entertainment ticketing vendor**: a `venues_master`
+reference drop plus daily `ticket_sales` and `footfall` files.
 Pure-Python and testable: the server is abstracted behind a client
 (`list_files()` / `get(name)`), so a caller can inject an in-memory drop (the smoke test does); in production
 files land in an ADLS landing zone and Auto Loader (or a copy job) writes Bronze,
@@ -12,17 +16,20 @@ Loaded with `source_config.load_configs(path, SFTP_REQUIRED_KEYS)`:
 
 ```json
 {
-  "source_system": "card_scheme_vendor",
-  "file_pattern": "settlement_(?P<date>\\d{4}-\\d{2}-\\d{2})\\.csv",
-  "business_columns": ["settlement_id", "merchant_id", "amount", "currency",
-                       "settlement_date"],
-  "target_bronze_table": "bronze.sftp_settlements",
-  "source_dir": "sftp://card-vendor/incoming", "enabled": true
+  "source_system": "ticketing_vendor",
+  "file_pattern": "ticket_sales_(?P<date>\\d{4}-\\d{2}-\\d{2})\\.csv",
+  "business_columns": ["ticket_id", "venue_id", "event_id", "quantity",
+                       "amount", "currency", "sale_date"],
+  "target_bronze_table": "bronze.sftp_ticket_sales",
+  "source_dir": "sftp://ticketing-vendor/incoming", "enabled": true
 }
 ```
 
 The `file_pattern` is a regex with a named `(?P<date>…)` group used for both
-pattern validation and file-date extraction.
+pattern validation and file-date extraction. The same vendor delivers a
+`venues_master_(?P<date>…)\.csv` reference drop (`bronze.entertainment_venues`,
+`load_type: full`) and a daily `footfall_(?P<date>…)\.csv` feed
+(`bronze.sftp_footfall`) — one config entry per file family.
 
 ## Behaviour
 

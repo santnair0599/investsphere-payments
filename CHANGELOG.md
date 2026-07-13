@@ -6,6 +6,59 @@ All notable changes to InvestSphere Payments are documented here. Format follows
 
 ## [Unreleased]
 
+## [2.1.0] — GenAI hardening, model selection & production delivery
+### Added (AI plane — enhancements 6–12, all feature-flagged w/ offline fallbacks)
+- **Foundry IQ agentic-retrieval benchmark** (`ai/benchmarks/`) — recall/precision/MRR/nDCG
+  + agentic-vs-baseline lift.
+- **Document Intelligence reconciliation** (`ai/docintel/`) — OCR extract → reconcile
+  against `gold.fact_payments` (MATCH/MISMATCH/MISSING).
+- **Production failure + load tests** (`ai/tests/`) — locust SLO gate + chaos/resilience
+  tests (mocked client → real degradation paths).
+- **Responsible-AI red-team suite** (`ai/redteam/`) — ASR per category; blocks CI on breach.
+- **Arabic bilingual retrieval + parity** (`ai/i18n/`, `ai/rag/policies/ar/`) — AR/EN
+  retrieval + answer parity gate.
+- **Streaming HITL approval UI** (`ai/ui/`) — SSE answers; sensitive actions pause for approval.
+- **Microsoft Teams publishing** (`ai/integrations/teams/`) — Adaptive Cards for
+  recommendations / alerts / answers.
+### Added (model selection)
+- `docs/MODEL_SELECTION.md` — evaluation criteria, benchmark harness, and the **two-tier
+  GPT-4o + GPT-4o-mini** decision via the model router; reproduce with `ai.eval.run_evals`
+  + the retrieval/red-team/parity suites.
+### Changed (CI/CD → production-grade delivery)
+- **Offline AI quality gate** (`ai/ci/run_quality_gate.py`, `quality_gates.yaml`) — required
+  PR check: unit · chaos · red-team · Arabic · retrieval-lift · structured-output · authz;
+  emits an evidence report.
+- **Reusable deploy** (`ai-deploy.yml` `workflow_call`) with **build-once / promote-by-digest**;
+  prod ships the **test-approved digest** (`deploy-prod needs deploy-test`).
+- **Azure OIDC / workload identity federation** — no stored SP secret; **least-privilege
+  custom deploy role** (not Contributor); **Databricks token → managed-identity Entra token**.
+- **Blue-green + canary soak + auto-rollback**; deploy-evidence + smoke-result artifacts;
+  **nightly live-Azure gate** + Teams failure alerts.
+- `docs/CICD_SETUP.md`, `scripts/setup_azure_oidc.sh`, `scripts/setup_github_cicd.sh`,
+  `ai/README_ENHANCEMENTS.md`.
+
+## [2.0.0] — Diversified enterprise + GenAI decision agent
+### Changed (data platform)
+- **Pivoted the domain** from payments to a Dubai Holding-style diversified enterprise
+  (real estate, hospitality, entertainment, investment, customer). The **six ingestion
+  patterns and the entire engineering foundation are preserved** — only the business
+  payloads/tables changed. See `docs/ENTERPRISE_PIVOT.md`.
+- Repointed all 6 source configs (JDBC→Oracle PMS + SQL Server treasury, REST→booking
+  platform + FX, Salesforce→CRM, SFTP→ticketing, Autoloader→campaign, CDC→guest master).
+- Added 5 domain **Silver conformers** (`src/payments_platform/databricks/silver_*.py`),
+  each mirroring the DQ/quarantine/dedup/MERGE pattern; wired into the bundle DAG.
+- Replaced payments Gold with **6 Gold schemas** (`dbt/models/gold_*`): dims/facts +
+  a `mart_*` risk surface per domain, plus `gold_ops_trust` (pipeline/DQ/freshness/trust).
+  `dbt parse` clean across all 29 models.
+### Added (Azure GenAI plane — `ai/`)
+- **Enterprise Decision Agent**: LangGraph/FastAPI runtime + Azure AI Foundry config,
+  Azure OpenAI, tool-calling over governed marts, Azure AI Search **RAG** (hybrid+semantic)
+  over 8 policy/KPI docs.
+- **Trust gate**, deterministic **guardrails** (PII/injection/approval), **30-question
+  eval set** + CI **eval gate**, `ai_control.*` **observability** tables.
+- **Bicep** infra (Foundry/OpenAI/Search/Container Apps/Key Vault/App Insights) +
+  GitHub Actions AI deploy pipeline; UC read-only grants + masked customer view.
+
 ### Summary — full Databricks execution layer
 The platform now runs **end to end for real on Spark**, not just as a tested reference.
 All six Bronze sources (file/Auto Loader, customer CDC, JDBC, REST, SFTP, Salesforce),

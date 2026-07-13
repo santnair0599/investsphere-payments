@@ -1,5 +1,10 @@
 # Gate & pipeline monitoring (Databricks SQL)
 
+> This project evolved from a payments-practice foundation into an enterprise business AI decision platform. The original ingestion and lakehouse patterns were preserved and generalized across enterprise domains.
+
+The Bronze and Silver DQ gates guard the **six domain conformers** (real-estate,
+hospitality, entertainment, investment, customer/guest) and, through
+`silver_control.*`, feed the `gold_ops_trust` trust marts the decision agent reads.
 The gate tasks and the pipeline endpoints persist their outcomes to Delta control
 tables (see `src/payments_platform/databricks/gates.py`):
 
@@ -104,5 +109,7 @@ WHERE source_key IN ('payments_file', 'customer_cdc')
 ```
 
 The thresholds mirror the gate policies in `gates.py`
-(`max_quarantine_rate_pct = 30`, `required_sources = [payments_file, customer_cdc]`) —
-keep them in sync when you tune a gate.
+(`max_quarantine_rate_pct = 30`, `required_sources = [payments_file, customer_cdc]`
+— `payments_file` is the **internal source key** for the Autoloader file-drop
+source, retained from the original foundation) — keep them in sync when you tune a
+gate.

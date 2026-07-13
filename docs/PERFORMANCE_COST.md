@@ -1,5 +1,11 @@
 # Performance, cost & scalability
 
+> This project evolved from a payments-practice foundation into an enterprise business AI decision platform. The original ingestion and lakehouse patterns were preserved and generalized across enterprise domains.
+
+> This covers **Databricks compute** cost (DBUs / OPTIMIZE / clustering /
+> serverless). The Azure OpenAI **token/spend** story for the GenAI agent lives in
+> [CAPACITY_COST.md](CAPACITY_COST.md).
+
 The `perf/` package validates the platform's performance, cost, and scalability
 *behaviour* with a deterministic, pure-Python harness — then maps each local
 signal to its Databricks production equivalent. It is additive and reference-only:
@@ -14,8 +20,11 @@ src/payments_platform/perf/
   recommendations.py  the 8 optimization recommendations + a workload-profile matcher
 ```
 
-These `payments_platform.perf.*` modules are the cost/health reference models; on
-Databricks the signals come from `system.billing.usage` + table stats (see below).
+These `payments_platform.perf.*` modules (internal package name) are the
+cost/health reference models; on Databricks the signals come from
+`system.billing.usage` + table stats (see below). The high-volume facts they
+model at scale are the domain-heavy tables — `fact_occupancy` (occupancy_daily)
+and `fact_asset_performance` — plus the six domain marts.
 
 ## What is benchmarked locally
 
@@ -25,8 +34,8 @@ Databricks the signals come from `system.billing.usage` + table stats (see below
 | `jdbc_incremental` | metadata-driven For-Each over N source tables | `bronze/jdbc_ingest` |
 | `cdc_scd2_apply` | SCD2 apply over an out-of-order, duplicated CDC stream | `silver/cdc_apply` |
 | `silver_dq_quarantine` | dedup + DQ rules + quarantine split | `silver/dedup,dq,quarantine` |
-| `dbt_gold_build_sim` | a Gold aggregation (revenue per customer/currency) | (simulation) |
-| `end_to_end_dag` | the full 15-task monitored DAG over in-memory sources | `orchestration` + `monitoring` |
+| `dbt_gold_build_sim` | a Gold aggregation (e.g. RevPAR per hotel, occupancy per property) | (simulation) |
+| `end_to_end_dag` | the full 22-task monitored DAG over in-memory sources | `orchestration` + `monitoring` |
 
 Each run writes real monitoring rows (`table_load_status` per table, one
 `quarantine_summary`, `dbt_results`, and `cost_summary` per timed task), so a
@@ -80,7 +89,7 @@ small files (→ **OPTIMIZE**), accumulated tombstones with no recent vacuum (�
 | stats staleness | **`ANALYZE TABLE … COMPUTE STATISTICS`** (or auto-stats) feeding the CBO |
 | `dbt_gold_build_sim` aggregation | a **Photon**-accelerated SQL warehouse build; Photon vectorizes scans/aggregations |
 | `make_jdbc_configs(N)` For-Each | a Lakeflow **For-Each task** over the `source_config` control table |
-| large Gold table | **Liquid Clustering** (`CLUSTER BY [AUTO]`) instead of static partitioning |
+| large Gold fact (`fact_occupancy`, `fact_asset_performance`) | **Liquid Clustering** (`CLUSTER BY [AUTO]`) instead of static partitioning |
 | serverless vs all-purpose cost | **serverless jobs / job clusters** (cheaper, ephemeral) over all-purpose |
 
 ## Optimization recommendations (`recommendations.py`)

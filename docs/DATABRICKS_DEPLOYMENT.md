@@ -1,8 +1,15 @@
 # Databricks deployment
 
+> This project evolved from a payments-practice foundation into an enterprise
+> business AI decision platform. The original ingestion and lakehouse patterns were
+> preserved and generalized across enterprise domains (real estate, hospitality,
+> entertainment, investment, customer/CRM, ops-trust).
+
 How the project goes from the local pure-Python reference to a running Azure
 Databricks workspace, using **Terraform** (infrastructure) + **Databricks Asset
-Bundles** (`databricks.yml`, the jobs).
+Bundles** (`databricks.yml`, the jobs). The bundle and dbt project keep the internal
+name `investsphere_payments` (retained from the payments-practice origin); the story,
+tables, and marts are the enterprise domains.
 
 ## Local reference mode vs Databricks production mode
 
@@ -90,7 +97,7 @@ scripts/deploy_bundle.sh deploy   dev --dry-run   # validate only
 scripts/deploy_bundle.sh deploy   dev          # databricks bundle deploy -t dev
 ```
 
-The bundle defines three targets (`dev`/`test`/`prod`), the full 15-task
+The bundle defines three targets (`dev`/`test`/`prod`), the full 22-task
 `investsphere_payments_daily_e2e` job, and the `investsphere_payments_smoke` job.
 `dev` runs as the deploying user; **test/prod run as the ETL service principal**.
 

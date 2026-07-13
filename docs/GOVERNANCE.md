@@ -1,4 +1,6 @@
-# Unity Catalog governance — InvestSphere Payments
+# Unity Catalog governance — InvestSphere
+
+> This project evolved from a payments-practice foundation into an enterprise business AI decision platform. The original ingestion and lakehouse patterns were preserved and generalized across enterprise domains.
 
 Governance is **policy-as-code**: one declarative model
 (`src/payments_platform/governance/policy.py`) is the single source of truth.
@@ -45,16 +47,19 @@ The generated grants reference them by name.
 | Object | ETL SP | data_engineers | analysts | pii_approved | data_stewards |
 |---|---|---|---|---|---|
 | Bronze/Silver/Gold base (read+write) | ✅ RW | — | — | — | — |
-| PII base (`customer_scd2`, `dim_customer*`) | RW | ❌ | ❌ | ✅ SELECT (unmasked) | — |
-| Non-PII Gold (`fact_payments`) | RW | ✅ SELECT | — | — | — |
-| Gold marts (`daily_payment_summary`) | RW | ✅ | ✅ | — | — |
+| Customer/guest PII base (`customer_scd2`, `dim_customer*`, `sfdc_contact`) | RW | ❌ | ❌ | ✅ SELECT (unmasked) | — |
+| Non-PII Gold fact (`fact_occupancy`) | RW | ✅ SELECT | — | — | — |
+| Gold domain marts (`mart_hotel_revenue_risk`) | RW | ✅ | ✅ | — | — |
 | Masked view — engineer (hashed keys) | — | ✅ | — | — | — |
 | Masked view — analytics (`v_customer_masked_for_analytics`) | — | — | ✅ | — | — |
 | Quarantine raw payload | RW | ❌ | ❌ | ✅ | ✅ |
 | Control tables | RW | ✅ | — | — | ✅ |
 
 The **only writer is the service principal** — engineers/analysts never write
-production tables.
+production tables. The **Azure GenAI agent** connects with its own read-only
+service principal that sees only the masked `gold_*` marts and the
+`gold_ops_trust` trust tables through the SQL warehouse — so the decision agent
+can never read raw customer/guest PII.
 
 ## How masking works
 

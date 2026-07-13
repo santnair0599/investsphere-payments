@@ -1,8 +1,15 @@
 # Architecture
 
-Diagrams for the InvestSphere Payments platform. Each renders on GitHub (Mermaid)
-and has an ASCII equivalent for terminals. See [`DESIGN.md`](DESIGN.md) for the
-narrative design and the per-area docs for detail.
+> This project evolved from a payments-practice foundation into an enterprise
+> business AI decision platform. The original ingestion and lakehouse patterns were
+> preserved and generalized across enterprise domains.
+
+Diagrams for the InvestSphere enterprise decision platform (bundle/package name
+`investsphere_payments`, an internal identifier retained from the payments-practice
+foundation). Each renders on GitHub (Mermaid) and has an ASCII equivalent for
+terminals. See [`DESIGN.md`](DESIGN.md) for the narrative design, the
+[`ENTERPRISE_PIVOT.md`](ENTERPRISE_PIVOT.md) for the six-source → domain mapping,
+and the per-area docs for detail.
 
 - [1. End-to-end data flow (medallion)](#1-end-to-end-data-flow-medallion)
 - [2. Orchestration DAG (runtime)](#2-orchestration-dag-runtime)
@@ -20,12 +27,12 @@ the BI layer serves Power BI. Schemas shown are the Unity Catalog schemas.
 ```mermaid
 flowchart TD
   subgraph Sources
-    F[ADLS file feed<br/>payments CSV]
-    J[Oracle / SQL Server<br/>JDBC incremental]
-    C[Debezium CDC<br/>customer]
-    R[REST API]
-    SP[SFTP vendor files]
-    SF[Salesforce]
+    F[ADLS file feed<br/>campaign CSV]
+    J[Oracle PMS / SQL Server treasury<br/>JDBC incremental]
+    C[Debezium CDC<br/>customer / guest]
+    R[REST API<br/>hospitality bookings + FX]
+    SP[SFTP vendor files<br/>entertainment ticketing]
+    SF[Salesforce CRM]
   end
 
   subgraph Bronze["Bronze — bronze.*"]
@@ -43,10 +50,10 @@ flowchart TD
 
   GATE2{Silver DQ gate<br/>quarantine rate · FAIL severity}
 
-  subgraph Gold["Gold — gold / gold_marts (dbt)"]
-    G1[dim_customer + history]
-    G2[fact_payments]
-    G3[daily_payment_summary]
+  subgraph Gold["Gold — gold_realestate / gold_hospitality / gold_entertainment / gold_investment / gold_customer / gold_ops_trust (dbt)"]
+    G1[dim_customer / dim_guest + history]
+    G2[domain facts<br/>occupancy · booking · ticket_sales · asset_performance]
+    G3[business marts<br/>property_underperformance · hotel_revenue_risk · investment_risk]
   end
 
   subgraph Serving["BI serving — gold_marts / gold_masked"]
@@ -86,9 +93,12 @@ added to its `required_sources` policy.
 
 ## 2. Orchestration DAG (runtime)
 
-`investsphere_payments_daily_e2e` — 15 tasks, mirrored 1:1 in `databricks.yml` as a
-Lakeflow Job and executed locally by `orchestration/runner.py`. Gates publish a
-task value that a condition task branches on; `write_status` runs `ALL_DONE`.
+`investsphere_payments_daily_e2e` (internal name) — 22 tasks, mirrored 1:1 in
+`databricks.yml` as a Lakeflow Job and executed locally by `orchestration/runner.py`.
+Gates publish a task value that a condition task branches on; `write_status` runs
+`ALL_DONE`. The `bronze_payments_file` and `silver_payments` task names are the
+retained payments-practice path — the same Autoloader/Silver mechanics now carry the
+enterprise campaign and domain payloads.
 
 ```mermaid
 flowchart TD
@@ -171,7 +181,7 @@ flowchart TB
     MSQL[monitoring/sql — dashboards]
   end
   subgraph AB["Asset Bundle — databricks.yml (owns jobs)"]
-    JOB[daily_e2e job · 15 tasks]
+    JOB[daily_e2e job · 22 tasks]
     SMK[smoke-test job]
   end
   TF -->|outputs: catalog · warehouse_id · secret_scope · SPN| AB
@@ -208,3 +218,34 @@ per-env tfvars/bundle vars. dev runs as the deploying user; **test/prod run as t
 ETL service principal** (the only writer of base tables); prod is gated behind a
 manual approval. See [TERRAFORM.md](TERRAFORM.md) and
 [DATABRICKS_DEPLOYMENT.md](DATABRICKS_DEPLOYMENT.md).
+
+---
+
+## 6. AI plane & production delivery (`ai/`)
+
+The GenAI plane sits on the Gold marts. The agent has **two interchangeable runtimes**
+(raw Azure OpenAI loop / LangGraph) behind one tool + guardrail + eval + observability
+layer, plus an Azure AI Foundry twin. The model is **swappable** (default: two-tier
+**GPT-4o + GPT-4o-mini** via the router — see [MODEL_SELECTION.md](MODEL_SELECTION.md)).
+
+```
+ user ─▶ APIM ─▶ Enterprise Decision Agent (Container Apps / Foundry Agent Service)
+                  ├─ UC SQL tools ─▶ governed Gold marts (read-only, masked, MI/Entra-token auth)
+                  ├─ Azure AI Search RAG (hybrid+semantic; EN + AR policy corpora)
+                  ├─ guardrails: Content Safety (Prompt Shields · PII · jailbreak)
+                  ├─ structured output: BusinessRecommendation (JSON schema)
+                  └─ obs+eval: App Insights traces · MLflow/Azure evaluators · cost/pricing
+   enhancements: Doc-Intelligence reconciliation · streaming HITL approval · Teams publishing
+```
+
+### Delivery pipeline (GitHub Actions — build-once / promote-by-digest, OIDC, blue-green)
+```
+PR      → offline AI QUALITY GATE (required): unit·chaos·red-team·Arabic·retrieval-lift·structured·authz
+push    → build ONCE → digest ──┬─▶ deploy-test  (env test, cutover + smoke on real Gold)
+                                 └─▶ deploy-prod  (needs deploy-test → SAME digest;
+                                       env prod approval → 20% canary → soak → promote-100% | rollback-to-blue)
+nightly → live-Azure gate (eval + red-team + parity) → evidence artifact + Teams alert on fail
+auth    → Azure OIDC (no SP secret) · least-privilege custom deploy role · Databricks via managed-identity Entra token
+```
+Details: [CICD_SETUP.md](CICD_SETUP.md) · [EVALUATION_OBSERVABILITY.md](EVALUATION_OBSERVABILITY.md) ·
+[ai/README_ENHANCEMENTS.md](../ai/README_ENHANCEMENTS.md).

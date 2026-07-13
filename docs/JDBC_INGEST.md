@@ -1,7 +1,12 @@
 # Metadata-driven JDBC ingestor (Oracle / SQL Server → Bronze)
 
+> This project evolved from a payments-practice foundation into an enterprise business AI decision platform. The original ingestion and lakehouse patterns were preserved and generalized across enterprise domains.
+
 One reusable ingestor drives many tables from a **config table**, with watermark
 incremental loads, backfill, retries, duplicate-PK handling and audit columns.
+Two source systems are onboarded through this one pattern: the **real-estate
+property-management system (Oracle)** and the **investment / treasury
+system (SQL Server)**.
 The DB is abstracted behind `source.read(source_table, predicate)`, so the same
 logic runs against an in-memory fake (the smoke test) or Spark JDBC in Databricks.
 
@@ -25,6 +30,24 @@ Bronze Delta table and advances the watermark control row.
 | enabled | skip when false |
 
 Reference seed: `seeds/jdbc/source_config.json`; loader `bronze/source_config.py`.
+
+### Onboarded tables
+
+| Source system | Bronze table | Load type | Notes |
+|---|---|---|---|
+| Oracle (real-estate PMS) | `bronze.oracle_properties` | full | small reference master |
+| Oracle (real-estate PMS) | `bronze.oracle_leases` | incremental | watermark `last_updated_date` |
+| Oracle (real-estate PMS) | `bronze.oracle_occupancy_daily` | incremental | **large fact** — tuned `fetchsize` + partitioned read |
+| Oracle (real-estate PMS) | `bronze.oracle_maintenance_orders` | incremental | watermark `last_updated_date` |
+| SQL Server (investment/treasury) | `bronze.sqlserver_assets` | full | small reference master |
+| SQL Server (investment/treasury) | `bronze.sqlserver_asset_performance` | incremental | **large fact** — tuned `fetchsize` + partitioned read |
+| SQL Server (investment/treasury) | `bronze.sqlserver_risk_exposure` | incremental | watermark `as_of_date` |
+| SQL Server (investment/treasury) | `bronze.sqlserver_cashflow` | incremental | watermark `value_date` |
+
+The high-volume daily facts (`oracle_occupancy_daily`, `sqlserver_asset_performance`)
+carry `fetchsize`, `partition_column`, `num_partitions`, and `lower_bound/upper_bound`
+in their config so the JDBC read is a **bounded parallel read on the numeric PK** —
+the rest use plain watermark increments.
 
 ## Behaviour
 

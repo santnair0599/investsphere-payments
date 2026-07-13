@@ -1,9 +1,21 @@
 # REST API ingestor
 
+> This project evolved from a payments-practice foundation into an enterprise business AI decision platform. The original ingestion and lakehouse patterns were preserved and generalized across enterprise domains.
+
 `bronze/rest_ingest.py` lands a paginated REST API source into Bronze. Pure-Python
 and testable: the HTTP layer is abstracted behind a client (`fetch(endpoint,
 params) -> RestResponse`), so a caller can inject an in-memory API (the smoke test does); in production it is a
 paged `requests`/connector loop writing a Bronze Delta table.
+
+The onboarded source is the **hospitality booking platform** (hotel master,
+bookings, revenue) plus an **FX rates** feed used for investment valuation:
+
+| API name | Endpoint | Bronze table | Load type | Pagination |
+|---|---|---|---|---|
+| `booking_api_hotels` | `/v1/hotels` | `bronze.rest_hotels` | full | page |
+| `booking_api_bookings` | `/v1/hotels/bookings` | `bronze.rest_hotel_bookings` | incremental | cursor |
+| `booking_api_revenue` | `/v1/hotels/revenue` | `bronze.rest_hotel_revenue` | incremental | page |
+| `fx_rates_api` | `/v1/fx/rates` | `bronze.rest_fx_rates` | incremental | page |
 
 ## Config (source-config style)
 
@@ -18,6 +30,20 @@ A JSON list (Delta `silver_control.source_config` in prod), loaded with
   "request_params": {"base": "AED"},
   "auth": {"scheme": "Bearer", "secret_name": "rest_api_token"},
   "pagination": {"type": "page", "page_param": "page", "size": 2},
+  "watermark": {"param": "updated_since", "field": "updated_at"}
+}
+```
+
+The booking endpoints reuse the same shape; `booking_api_bookings` uses **cursor**
+pagination instead of page-number:
+
+```json
+{
+  "source_system": "partner_api", "api_name": "booking_api_bookings",
+  "endpoint": "/v1/hotels/bookings", "target_bronze_table": "bronze.rest_hotel_bookings",
+  "primary_key": "booking_id", "load_type": "incremental", "enabled": true,
+  "auth": {"scheme": "Bearer", "secret_name": "rest_api_token"},
+  "pagination": {"type": "cursor", "cursor_param": "cursor"},
   "watermark": {"param": "updated_since", "field": "updated_at"}
 }
 ```

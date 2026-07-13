@@ -1,6 +1,12 @@
-# Interview story — InvestSphere Payments
+# Interview story — InvestSphere
 
-Interview-ready talking points for this project, in **STAR** format (Situation,
+> This project evolved from a payments-practice foundation into an enterprise
+> business AI decision platform. The original ingestion and lakehouse patterns were
+> preserved and generalized across enterprise domains.
+
+Interview-ready talking points for this project (bundle/package name
+`investsphere_payments`, an internal identifier retained from the payments-practice
+foundation), in **STAR** format (Situation,
 Task, Action, Result). Stories are sequenced in **build order** — ingestion →
 transformations → quality → governance → orchestration → observability →
 platform → serving — so you can walk an interviewer through the platform the way
@@ -8,14 +14,17 @@ it was built. Pair with the diagrams in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Elevator pitch
 
-**30 seconds.** "InvestSphere Payments is a governed, multi-source lakehouse on
-Azure Databricks for payments and investment data. Six sources land in Bronze,
-get cleaned and conformed in Silver — including SCD2 CDC with out-of-order
-handling — then dbt builds the Gold star schema, which Power BI consumes through
-masked, PII-safe serving views. Unity Catalog governance, monitoring/cost, and the
-whole Terraform + Asset Bundle deployment are all policy-as-code, and the data
-logic lives in one reusable Python library that the Spark jobs import — a single
-source of truth from design to the Databricks runtime."
+**30 seconds.** "InvestSphere is a governed, multi-source lakehouse on Azure
+Databricks for a **diversified investment holding company** — real estate,
+hospitality, entertainment, and investment. Six sources land in Bronze, get cleaned
+and conformed in Silver — including SCD2 CDC with out-of-order handling — then dbt
+builds the Gold business marts, which Power BI consumes through masked, PII-safe
+serving views. On top, an **Azure AI Foundry / LangGraph agent** answers leadership
+questions grounded in those marts, trust-gated by pipeline and data-quality signals.
+Unity Catalog governance, monitoring/cost, and the whole Terraform + Asset Bundle
+deployment are all policy-as-code, and the data logic lives in one reusable Python
+library that the Spark jobs import — a single source of truth from design to the
+Databricks runtime."
 
 **2 minutes.** Add the *why*: I wanted to prove every hard mechanic of a
 production lakehouse — metadata-driven ingestion, correct CDC, data-quality gating,
@@ -34,9 +43,11 @@ Bundle → smoke test.
 
 ### 1. Metadata-driven multi-source ingestion
 
-- **S** — Payments data arrives from six very different sources: an ADLS file feed,
-  Oracle/SQL Server (JDBC), Debezium CDC, a REST API, SFTP vendor files, and
-  Salesforce. Hand-writing a bespoke ingestor per source doesn't scale and rots.
+- **S** — Enterprise data arrives from six very different sources: an ADLS campaign
+  file feed (Autoloader), the real-estate PMS and investment/treasury systems via
+  JDBC (Oracle/SQL Server), Debezium CDC on the customer/guest master, a hospitality
+  booking REST API, SFTP entertainment-ticketing vendor files, and a Salesforce CRM.
+  Hand-writing a bespoke ingestor per source doesn't scale and rots.
 - **T** — Make adding or changing a source a *configuration* change, not a code
   change, while still handling each source's quirks (pagination, watermarks, file
   patterns, soft-deletes).
@@ -78,13 +89,13 @@ Bundle → smoke test.
 
 ### 3. Data quality you can't silently lose
 
-- **S** — Bad payments (negative amounts, disallowed currencies, missing keys) must
-  never reach Gold — but they also must never be silently dropped in a regulated
-  domain.
+- **S** — Bad records (negative revenue, invalid occupancy rates, disallowed
+  currencies, missing business keys) must never reach the Gold marts — but they also
+  must never be silently dropped in a governed enterprise domain.
 - **T** — Separate good from bad, keep full context on the bad, and stop unauditable
   data hard.
 - **A** — DQ rules carry **severities** (FAIL / QUARANTINE / WARN). A FAIL breach
-  (e.g. missing `payment_id`) raises and stops the job; QUARANTINE rows are routed
+  (e.g. a missing entity/business key) raises and stops the job; QUARANTINE rows are routed
   to a **Failed Record Register** with the failing rule, reason, raw payload,
   lineage, and an `OPEN` status; WARN rows pass but are counted. A **Silver DQ gate**
   then blocks promotion to Gold on quarantine-rate or FAIL-severity thresholds.
@@ -119,7 +130,7 @@ Bundle → smoke test.
   gate between layers, and survive partial failures.
 - **T** — Model the workflow declaratively, run it both locally and as a Lakeflow
   Job, and make sure an optional source failing doesn't take down the run.
-- **A** — A **declarative DAG** (15 tasks) mirrored 1:1 in `databricks.yml`: parallel
+- **A** — A **declarative DAG** (22 tasks) mirrored 1:1 in `databricks.yml`: parallel
   Bronze → **validation gate** → parallel Silver → **DQ gate** → dbt build/test →
   governance validation → publish → monitoring write (`ALL_DONE`). Gates publish a
   task value a condition task branches on. The Bronze gate depends only on the
@@ -168,8 +179,8 @@ Bundle → smoke test.
 
 ### 8. A governed BI serving contract
 
-- **S** — Power BI must serve payments analytics **without ever exposing PII**, and
-  metric definitions shouldn't live only inside a `.pbix`.
+- **S** — Power BI must serve enterprise business analytics **without ever exposing
+  PII**, and metric definitions shouldn't live only inside a `.pbix`.
 - **T** — Give BI a thin, safe, governed serving layer and a versioned semantic model.
 - **A** — Serving views in the analyst-granted schema source **only** marts, masked
   views, or the non-PII fact — never a PII base table — and a validator fails the build
@@ -225,6 +236,6 @@ documents its Databricks/Spark counterpart."
 
 ## Numbers to cite
 
-6 active Bronze sources · 15-task orchestration DAG · 5 Unity Catalog groups ·
+6 active Bronze sources · 22-task orchestration DAG · 5 Unity Catalog groups ·
 9 monitoring models · 9 alert rules · 6 SQL dashboards · 8 optimization
 recommendations · 3 BI serving datasets · dev/test/prod · **credential-free smoke test + generated-SQL drift in CI.**
