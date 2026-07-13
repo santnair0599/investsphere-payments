@@ -42,39 +42,49 @@ def _sse(event: str, data) -> str:
 
 async def _stream_answer(question: str, session_id: str):
     """Yield SSE frames. Uses the runtime's streaming hook if present, else chunks
-    the final answer. Gated actions raise an approval event and wait."""
+    the final answer. Gated actions raise an approval event and wait.
+
+    A failure inside the agent (throttled model, warehouse down, missing SDK) must
+    close the stream with an `error` frame. Letting it raise would drop the connection
+    mid-flight and the browser could not tell that apart from a network blip.
+    """
     yield _sse("start", {"question": question})
     try:
-        from ai.app.runtime import answer_stream            # optional async generator
-        agen = answer_stream(question=question, session_id=session_id)
-    except Exception:
-        agen = None
+        try:
+            from ai.app.runtime import answer_stream        # optional async generator
+            agen = answer_stream(question=question, session_id=session_id)
+        except Exception:
+            agen = None
 
-    if agen is not None:
-        async for chunk in agen:
-            if chunk.get("type") == "action_proposal":
-                async for frame in _await_approval(chunk):
-                    yield frame
-            else:
-                yield _sse("token", {"text": chunk.get("text", "")})
-        yield _sse("done", {})
-        return
-
-    # fallback: non-streaming runtime -> chunk the answer, gate any proposed action
-    from ai.app.runtime import answer
-    result = answer(question=question, session_id=session_id) or {}
-    action = result.get("proposed_action")
-    if action:
-        async for frame in _await_approval(action):
-            yield frame
-        if PENDING.get(action["action_id"], {}).get("decision") is not True:
-            yield _sse("done", {"status": "rejected"})
+        if agen is not None:
+            async for chunk in agen:
+                if chunk.get("type") == "action_proposal":
+                    async for frame in _await_approval(chunk):
+                        yield frame
+                else:
+                    yield _sse("token", {"text": chunk.get("text", "")})
+            yield _sse("done", {"status": "ok"})
             return
-    for word in (result.get("answer") or "").split(" "):
-        yield _sse("token", {"text": word + " "})
-        await asyncio.sleep(0.02)
-    yield _sse("trace", {"tools_called": result.get("tools_called", [])})
-    yield _sse("done", {"status": "ok"})
+
+        # fallback: non-streaming runtime -> chunk the answer, gate any proposed action
+        from ai.app.runtime import answer
+        result = answer(question=question, session_id=session_id) or {}
+        action = result.get("proposed_action")
+        if action:
+            async for frame in _await_approval(action):
+                yield frame
+            if PENDING.get(action["action_id"], {}).get("decision") is not True:
+                yield _sse("done", {"status": "rejected"})
+                return
+        for word in (result.get("answer") or "").split(" "):
+            yield _sse("token", {"text": word + " "})
+            await asyncio.sleep(0.02)
+        yield _sse("trace", {"tools_called": result.get("tools_called", [])})
+        yield _sse("done", {"status": "ok"})
+    except Exception as e:
+        yield _sse("error", {"message": "the agent could not complete this answer",
+                             "detail": f"{type(e).__name__}: {e}"})
+        yield _sse("done", {"status": "error"})
 
 
 async def _await_approval(action):

@@ -19,10 +19,55 @@ def _connect():
                          access_token=cfg.access_token, catalog=cfg.catalog)
 
 
+def _catalog() -> str:
+    return os.environ.get("DATABRICKS_CATALOG", "investsphere_prod")
+
+
+def fetch_run(run_id: str) -> dict | None:
+    """Read one traced run back for audit: the turn plus its tool calls.
+
+    Returns None when the run_id is unknown. Raises if the warehouse is unreachable —
+    unlike record_run this is not best-effort; an audit read that silently returns
+    nothing would be worse than an error.
+    """
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""SELECT run_id, session_id, user_id, question, answer, tools_called,
+                       retrieved_docs, safety_status, latency_ms, model, routing_reason,
+                       tokens_in, tokens_out, estimated_cost, groundedness_score,
+                       hallucination_flag, evaluation_mode, created_at
+                  FROM {_catalog()}.ai_control.agent_runs
+                 WHERE run_id = :run_id""",
+            {"run_id": run_id},
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        run = dict(zip([d[0] for d in cur.description], row))
+
+        cur.execute(
+            f"""SELECT tool_name, arguments, mart, success, created_at
+                  FROM {_catalog()}.ai_control.agent_tool_calls
+                 WHERE run_id = :run_id
+                 ORDER BY created_at""",
+            {"run_id": run_id},
+        )
+        cols = [d[0] for d in cur.description]
+        run["tool_calls"] = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    for field in ("tools_called", "retrieved_docs"):
+        if isinstance(run.get(field), str):
+            try:
+                run[field] = json.loads(run[field])
+            except ValueError:
+                pass
+    return run
+
+
 def record_run(record: dict, tool_trace: list[dict]) -> str:
     """Insert one agent_runs row + one agent_tool_calls row per tool. Returns run_id."""
     run_id = str(uuid.uuid4())
-    catalog = os.environ.get("DATABRICKS_CATALOG", "investsphere_prod")
+    catalog = _catalog()
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
             f"""INSERT INTO {catalog}.ai_control.agent_runs

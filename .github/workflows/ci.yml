@@ -111,6 +111,7 @@ jobs:
       - name: Install deps
         run: |
           pip install -r requirements.txt
+          pip install -r ai/requirements.txt   # fastapi + httpx: the gate boots the app
           pip install pytest pyyaml pydantic
       - name: AI quality gate (unit · chaos · red-team · Arabic · retrieval · structured · authz)
         run: python -m ai.ci.run_quality_gate
