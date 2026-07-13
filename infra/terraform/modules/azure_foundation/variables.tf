@@ -38,3 +38,14 @@ variable "tags" {
   type        = map(string)
   description = "Cost/governance tags: project, environment, owner, cost_center."
 }
+
+variable "databricks_app_object_id" {
+  type        = string
+  description = <<-EOT
+    Object id of the AzureDatabricks first-party enterprise app in THIS tenant.
+    Get it with:  az ad sp show --id 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d --query id -o tsv
+    Granted `Key Vault Secrets User` on the vault so Key Vault-backed Databricks
+    secret scopes resolve at RUNTIME (RBAC-mode vault). Empty string = skip.
+  EOT
+  default     = ""
+}

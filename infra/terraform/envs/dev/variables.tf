@@ -18,6 +18,12 @@ variable "key_vault_name" { type = string }
 variable "access_connector_name" { type = string }
 variable "catalog_name" { type = string }
 
+variable "databricks_app_object_id" {
+  type        = string
+  description = "Object id of the AzureDatabricks first-party app (tenant-stable). Grants Key Vault Secrets User so KV-backed secret scopes read at runtime."
+  default     = ""
+}
+
 variable "etl_service_principal" {
   type        = string
   description = "ETL service principal (job run-as in test/prod); set to the SPN application id in prod."

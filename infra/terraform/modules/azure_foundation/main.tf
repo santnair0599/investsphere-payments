@@ -55,3 +55,14 @@ resource "azurerm_role_assignment" "connector_storage" {
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azurerm_databricks_access_connector.this.identity[0].principal_id
 }
+
+# The AzureDatabricks first-party app must be able to READ the vault, or
+# Key Vault-backed secret scopes fail at runtime with PERMISSION_DENIED /
+# ForbiddenByRbac (the vault uses RBAC authorization, so a data-plane role
+# assignment is required — access policies don't apply).
+resource "azurerm_role_assignment" "databricks_kv_secrets" {
+  count                = var.databricks_app_object_id == "" ? 0 : 1
+  scope                = azurerm_key_vault.this.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = var.databricks_app_object_id
+}
