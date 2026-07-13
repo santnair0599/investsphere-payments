@@ -1,0 +1,92 @@
+name: ai-nightly-live-gate
+
+# Runs the SAME suites as the PR quality gate, but against LIVE Azure/Databricks
+# (flags flipped on) — catching regressions the offline gate can't see (real
+# retrieval, LLM-judge groundedness, adversarial simulator). Uploads evidence even
+# on failure, and alerts Teams when it fails.
+on:
+  schedule:
+    - cron: "0 2 * * *"          # 02:00 UTC daily
+  workflow_dispatch:
+
+concurrency:
+  group: ai-nightly
+  cancel-in-progress: true
+
+jobs:
+  live-gate:
+    runs-on: ubuntu-latest
+    environment: test             # pull live creds from the `test` environment
+    env:
+      AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+      AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+      AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+      AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+      AZURE_SEARCH_ENDPOINT: ${{ secrets.AZURE_SEARCH_ENDPOINT }}
+      AZURE_SEARCH_KEY: ${{ secrets.AZURE_SEARCH_KEY }}
+      AZURE_SEARCH_AGENT: ${{ secrets.AZURE_SEARCH_AGENT }}
+      AZURE_AI_PROJECT: ${{ secrets.AZURE_AI_PROJECT }}
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      DATABRICKS_CATALOG: ${{ secrets.DATABRICKS_CATALOG }}
+      # flip the live flags
+      EVAL_GATE_ENABLED: "true"
+      AGENTIC_RETRIEVAL_ENABLED: "true"
+      REDTEAM_SIMULATOR_ENABLED: "true"
+      LIVE_GROUNDEDNESS_ENABLED: "true"
+      GATE_REPORT: artifacts/_gate_report.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          pip install -r ai/requirements.txt
+          pip install pytest pyyaml pydantic azure-ai-evaluation
+      - run: mkdir -p artifacts
+
+      - name: Live eval gate (Azure evaluators)
+        id: eval
+        continue-on-error: true
+        run: python -m ai.eval.run_evals 2>&1 | tee artifacts/eval.txt
+
+      - name: Live quality gate (agentic retrieval + red-team simulator + parity)
+        id: gate
+        continue-on-error: true
+        run: python -m ai.ci.run_quality_gate 2>&1 | tee artifacts/gate.txt
+
+      - name: Upload evidence (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-evidence-${{ github.run_id }}
+          path: |
+            artifacts/**
+          if-no-files-found: warn
+
+      - name: Fail if any live gate regressed
+        if: always()
+        run: |
+          echo "eval=${{ steps.eval.outcome }}  gate=${{ steps.gate.outcome }}"
+          test "${{ steps.eval.outcome }}" = "success" && test "${{ steps.gate.outcome }}" = "success"
+
+      - name: Alert Teams on failure
+        if: failure()
+        env:
+          TEAMS_ENABLED: "true"
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          from ai.integrations.teams.publish import publish_alert
+          run = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          publish_alert({
+              "title": "Nightly AI live-gate FAILED",
+              "severity": "HIGH", "rule": "ai-nightly-live-gate",
+              "metric": "eval/quality_gate", "value": "regressed",
+              "table": os.environ.get("GITHUB_REPOSITORY", ""),
+              "message": f"See evidence artifact + run: {run}",
+          })
+          PY

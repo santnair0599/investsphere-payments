@@ -1,0 +1,233 @@
+name: ai-plane-deploy
+
+# REUSABLE deploy for the GenAI plane. Build-once/promote-by-digest: the caller
+# builds the image ONCE (ci.yml `build` job) and passes the pinned digest here, so
+# test and prod deploy the EXACT same artifact. Auth is Azure OIDC (no stored SP
+# secret). Deploy is blue-green with an automated rollback on smoke-test failure.
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "target GitHub environment (test/prod)"
+        type: string
+        required: true
+      image:
+        description: "pinned image digest: <registry>/investsphere-agent@sha256:..."
+        type: string
+        required: true
+      canary_percent:
+        description: "traffic % shifted to the new (green) revision after smoke passes"
+        type: number
+        required: false
+        default: 100
+      soak_seconds:
+        description: "canary soak duration before promote-to-100% (only when canary_percent < 100)"
+        type: number
+        required: false
+        default: 300
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [test, prod]
+        default: test
+      image:
+        description: "<registry>/investsphere-agent@sha256:... (from the build job)"
+        type: string
+        required: true
+      canary_percent:
+        type: number
+        default: 100
+      soak_seconds:
+        type: number
+        default: 300
+
+permissions:
+  id-token: write        # OIDC / workload identity federation
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}     # env-scoped secrets + prod approval
+    env:
+      APP: investsphere-ai-agent
+      RG: ${{ secrets.AZURE_RG }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC — no stored secret)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # ---- capture the current (blue) revision for rollback -------------------
+      - name: Capture active revision (blue)
+        id: blue
+        run: |
+          BLUE=$(az containerapp ingress traffic show -n "$APP" -g "$RG" \
+                 --query "[?weight>\`0\`].revisionName | [0]" -o tsv 2>/dev/null || true)
+          if [ -z "$BLUE" ]; then
+            BLUE=$(az containerapp revision list -n "$APP" -g "$RG" \
+                   --query "[?properties.active].name | [0]" -o tsv 2>/dev/null || true)
+          fi
+          echo "name=$BLUE" >> "$GITHUB_OUTPUT"
+          echo "blue revision: ${BLUE:-<none / first deploy>}"
+
+      # ---- deploy GREEN on the pinned digest, at 0% traffic -------------------
+      - name: Provision + roll green revision (no traffic yet)
+        id: green
+        run: |
+          SUFFIX=$(echo "${{ github.sha }}" | cut -c1-8)
+          az deployment group create -g "$RG" \
+            --template-file infra/azure/main.bicep \
+            --parameters agentImage="${{ inputs.image }}" \
+                         databricksHost=${{ secrets.DATABRICKS_HOST }} \
+                         databricksHttpPath=${{ secrets.DATABRICKS_HTTP_PATH }}
+          # NOTE: no databricksToken — the Container App uses its system-assigned
+          # managed identity to mint an Entra token for Databricks at runtime
+          # (ai/tools/databricks_client._aad_token). The Bicep must enable that MI.
+          az containerapp revision set-mode -n "$APP" -g "$RG" --mode multiple
+          az containerapp update -n "$APP" -g "$RG" \
+             --image "${{ inputs.image }}" --revision-suffix "$SUFFIX"
+          GREEN=$(az containerapp revision list -n "$APP" -g "$RG" \
+                  --query "reverse(sort_by([].{n:name,t:properties.createdTime}, &t))[0].n" -o tsv)
+          if [ -n "${{ steps.blue.outputs.name }}" ]; then
+            az containerapp ingress traffic set -n "$APP" -g "$RG" \
+               --revision-weight "${{ steps.blue.outputs.name }}=100" "$GREEN=0"
+          fi
+          FQDN=$(az containerapp revision show -n "$APP" -g "$RG" --revision "$GREEN" \
+                 --query properties.fqdn -o tsv)
+          echo "name=$GREEN" >> "$GITHUB_OUTPUT"
+          echo "url=https://$FQDN" >> "$GITHUB_OUTPUT"
+          echo "green revision: $GREEN @ https://$FQDN"
+
+      - name: Index policy docs (RAG)
+        env:
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_SEARCH_ENDPOINT: ${{ secrets.AZURE_SEARCH_ENDPOINT }}
+          AZURE_SEARCH_KEY: ${{ secrets.AZURE_SEARCH_KEY }}
+        run: |
+          pip install -r ai/requirements.txt
+          python -m ai.rag.index_policies
+
+      # ---- smoke test GREEN directly (no user traffic on it yet) --------------
+      - name: Smoke test green revision
+        run: |
+          mkdir -p artifacts
+          pip install -r ai/requirements.txt
+          python -m ai.ci.smoke_deploy --base-url "${{ steps.green.outputs.url }}" \
+                 --out artifacts/smoke_result.json
+
+      # ---- promote: shift traffic to green (blue-green / canary) ---------------
+      - name: Shift traffic to green
+        if: success()
+        run: |
+          P=${{ inputs.canary_percent }}
+          if [ -n "${{ steps.blue.outputs.name }}" ] && [ "$P" -lt 100 ]; then
+            az containerapp ingress traffic set -n "$APP" -g "$RG" \
+               --revision-weight "${{ steps.green.outputs.name }}=$P" \
+                                 "${{ steps.blue.outputs.name }}=$((100-P))"
+            echo "canary: ${P}% -> green, $((100-P))% stays on blue for soak"
+          else
+            az containerapp ingress traffic set -n "$APP" -g "$RG" \
+               --revision-weight "${{ steps.green.outputs.name }}=100"
+            echo "cutover: 100% -> green"
+          fi
+
+      # ---- canary soak → promote to 100% or roll back ------------------------
+      - name: Canary soak, then promote or roll back
+        if: success() && inputs.canary_percent < 100
+        run: |
+          echo "soaking ${{ inputs.soak_seconds }}s at ${{ inputs.canary_percent }}% on green..."
+          sleep ${{ inputs.soak_seconds }}
+          fail=0
+          for i in $(seq 1 10); do
+            curl -fsS "${{ steps.green.outputs.url }}/health" >/dev/null || fail=$((fail+1))
+            sleep 3
+          done
+          STATE=$(az containerapp revision show -n "$APP" -g "$RG" \
+                  --revision "${{ steps.green.outputs.name }}" \
+                  --query "properties.healthState" -o tsv 2>/dev/null || echo Unknown)
+          echo "soak: health-probe failures=$fail/10, green healthState=$STATE"
+          if [ "$fail" -le 1 ] && [ "$STATE" != "Unhealthy" ]; then
+            az containerapp ingress traffic set -n "$APP" -g "$RG" \
+               --revision-weight "${{ steps.green.outputs.name }}=100"
+            [ -n "${{ steps.blue.outputs.name }}" ] && \
+              az containerapp revision deactivate -n "$APP" -g "$RG" \
+                 --revision "${{ steps.blue.outputs.name }}" || true
+            echo "PROMOTED: 100% -> green, blue deactivated"
+          else
+            echo "canary UNHEALTHY -> rolling back to blue"
+            [ -n "${{ steps.blue.outputs.name }}" ] && \
+              az containerapp ingress traffic set -n "$APP" -g "$RG" \
+                 --revision-weight "${{ steps.blue.outputs.name }}=100" || true
+            az containerapp revision deactivate -n "$APP" -g "$RG" \
+               --revision "${{ steps.green.outputs.name }}" || true
+            exit 1
+          fi
+
+      # ---- rollback: anything above failed -> keep blue live, kill green -------
+      - name: Rollback to blue
+        if: failure() && steps.green.outputs.name != ''
+        run: |
+          if [ -n "${{ steps.blue.outputs.name }}" ]; then
+            az containerapp ingress traffic set -n "$APP" -g "$RG" \
+               --revision-weight "${{ steps.blue.outputs.name }}=100" || true
+          fi
+          az containerapp revision deactivate -n "$APP" -g "$RG" \
+             --revision "${{ steps.green.outputs.name }}" || true
+          echo "ROLLED BACK to blue: ${{ steps.blue.outputs.name }} (green deactivated)"
+
+      # ---- evidence: revision + digest + trace ids, uploaded ALWAYS -----------
+      - name: Record deploy evidence
+        if: always()
+        run: |
+          mkdir -p artifacts
+          cat > artifacts/deploy-evidence.json <<JSON
+          {
+            "environment": "${{ inputs.environment }}",
+            "image_digest": "${{ inputs.image }}",
+            "blue_revision": "${{ steps.blue.outputs.name }}",
+            "green_revision": "${{ steps.green.outputs.name }}",
+            "green_url": "${{ steps.green.outputs.url }}",
+            "canary_percent": ${{ inputs.canary_percent }},
+            "job_status": "${{ job.status }}",
+            "github_run_id": "${{ github.run_id }}",
+            "commit_sha": "${{ github.sha }}"
+          }
+          JSON
+          [ -f artifacts/smoke_result.json ] && { echo "--smoke--"; cat artifacts/smoke_result.json; }
+          echo "--evidence--"; cat artifacts/deploy-evidence.json
+
+      - name: Upload deploy evidence (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-evidence-${{ inputs.environment }}-${{ github.run_id }}
+          path: artifacts/**
+          if-no-files-found: warn
+
+      # ---- alert Teams on any deploy/rollback failure -------------------------
+      - name: Alert Teams on deploy failure
+        if: failure()
+        env:
+          TEAMS_ENABLED: "true"
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: |
+          pip install -r ai/requirements.txt >/dev/null 2>&1 || true
+          python - <<'PY'
+          import os
+          from ai.integrations.teams.publish import publish_alert
+          run = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          publish_alert({
+              "title": "Deploy FAILED - rolled back to blue",
+              "severity": "HIGH", "rule": "ai-plane-deploy",
+              "metric": "smoke/soak", "value": "rolled_back",
+              "table": "${{ inputs.environment }}",
+              "message": f"green=${{ steps.green.outputs.name }} digest=${{ inputs.image }} run={run}",
+          })
+          PY

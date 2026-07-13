@@ -5,6 +5,12 @@ on:
     branches: [main, develop]
   pull_request:
 
+# Cancel superseded runs for the same ref on PRs (fast feedback), but NEVER cancel a
+# push run mid-flight — that could interrupt a deploy-test / deploy-prod job.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # ---- dbt compile-check (no cloud creds) ---------------------------------
   dbt-parse:
@@ -89,3 +95,89 @@ jobs:
           else
             echo "no workspace creds in this context; skipping bundle validate"
           fi
+
+  # ---- AI quality gate ----------------------------------------------------
+  # Runs the full AI check suite and enforces ai/ci/quality_gates.yaml. Offline
+  # (deterministic fallbacks) so it needs no Azure/Databricks creds. Make this a
+  # REQUIRED status check in branch protection -> a breach blocks merge, and the
+  # deploy-to-test job depends on it (needs: ai-quality-gate).
+  ai-quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pyyaml pydantic
+      - name: AI quality gate (unit · chaos · red-team · Arabic · retrieval · structured · authz)
+        run: python -m ai.ci.run_quality_gate
+      - name: Upload gate evidence (even on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gate-report
+          path: ai/ci/_gate_report.json
+          if-no-files-found: warn
+
+  # ---- build ONCE — push image, output the immutable digest (OIDC) --------
+  # Built a single time per push; the SAME digest is promoted to test then prod
+  # (build-once / promote-by-digest). Uses repo-level ACR + a build OIDC identity.
+  build:
+    needs: ai-quality-gate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Build & push, capture immutable digest
+        id: push
+        run: |
+          REPO=${{ secrets.ACR_LOGIN_SERVER }}/investsphere-agent
+          az acr login --name ${{ secrets.ACR_NAME }}
+          docker build -t "$REPO:${{ github.sha }}" -f ai/Dockerfile .
+          docker push "$REPO:${{ github.sha }}"
+          DIGEST=$(az acr repository show -n ${{ secrets.ACR_NAME }} \
+                   --image "investsphere-agent:${{ github.sha }}" --query digest -o tsv)
+          echo "image=$REPO@$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "built $REPO@$DIGEST"
+
+  # ---- deploy to TEST — promote the built digest, gated on the quality gate
+  # Runs on develop (dev testing) AND on main (staging validation before prod).
+  deploy-test:
+    needs: [ai-quality-gate, build]
+    if: (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main') && github.event_name == 'push'
+    uses: ./.github/workflows/ai-deploy.yml
+    with:
+      environment: test
+      image: ${{ needs.build.outputs.image }}
+      canary_percent: 100          # blue-green cutover after smoke
+    secrets: inherit
+
+  # ---- deploy to PROD — the TEST-APPROVED digest, approval + canary soak ---
+  # needs: deploy-test → prod only runs after the SAME-run test deploy + smoke
+  # succeeded, and ships the identical `needs.build.outputs.image` digest test
+  # validated. environment: prod → REQUIRED REVIEWERS approve first; then 20%
+  # canary → soak → auto promote-to-100% or rollback.
+  deploy-prod:
+    needs: [ai-quality-gate, build, deploy-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    uses: ./.github/workflows/ai-deploy.yml
+    with:
+      environment: prod
+      image: ${{ needs.build.outputs.image }}
+      canary_percent: 20
+      soak_seconds: 300
+    secrets: inherit
