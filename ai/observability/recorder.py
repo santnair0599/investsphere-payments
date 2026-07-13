@@ -9,7 +9,7 @@ import json
 import os
 import uuid
 
-from ai.tools.databricks_client import WarehouseConfig
+from ai.tools.databricks_client import WarehouseConfig, catalog as _shared_catalog
 
 
 def _connect():
@@ -20,7 +20,7 @@ def _connect():
 
 
 def _catalog() -> str:
-    return os.environ.get("DATABRICKS_CATALOG", "investsphere_prod")
+    return _shared_catalog()
 
 
 def fetch_run(run_id: str) -> dict | None:

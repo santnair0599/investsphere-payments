@@ -87,13 +87,10 @@ sources:
       - name: opportunity_clean
         description: "CRM opportunities → deal/leasing pipeline (one row per opportunity_id)."
 
-  # ---- FX (REST) — shared reference for investment/hospitality valuation ----
-  - name: silver_fx
-    catalog: "{{ var('catalog', 'investsphere_dev') }}"
-    schema: silver_fx
-    tables:
-      - name: fx_rates_clean
-        description: "FX rates to AED (one row per currency, rate_date)."
+  # NOTE: there is deliberately no `silver_fx` source. The REST ingestion pulls FX rates
+  # into Bronze, but no Silver conformer produces fx_rates_clean and no model reads it, so
+  # declaring the source only advertised a lineage that does not exist. Re-add it together
+  # with the conformer and the model that consumes it — not before.
 
   # ---- operational trust (existing control/audit tables, reused as-is) ------
   - name: silver_control

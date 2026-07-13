@@ -26,12 +26,27 @@ _FORBIDDEN = re.compile(
 )
 
 
+DEFAULT_CATALOG = "investsphere_prod"
+
+
+def catalog() -> str:
+    """The Unity Catalog every AI-plane reader targets.
+
+    Single source of truth: the recorder, the mart tools and the DocIntel
+    reconciliation all resolve the catalog through here. They previously each
+    inlined a default and disagreed — docintel fell back to `investsphere_dev`
+    while everything else fell back to `investsphere_prod`, so an unset env var
+    silently pointed one component at a different catalog than the rest.
+    """
+    return os.environ.get("DATABRICKS_CATALOG", DEFAULT_CATALOG)
+
+
 @dataclass
 class WarehouseConfig:
     server_hostname: str
     http_path: str
     access_token: str
-    catalog: str = "investsphere_prod"
+    catalog: str = DEFAULT_CATALOG
 
     @classmethod
     def from_env(cls) -> "WarehouseConfig":
@@ -43,7 +58,7 @@ class WarehouseConfig:
             server_hostname=os.environ["DATABRICKS_HOST"],
             http_path=os.environ["DATABRICKS_HTTP_PATH"],
             access_token=os.environ.get("DATABRICKS_TOKEN") or _aad_token(),
-            catalog=os.environ.get("DATABRICKS_CATALOG", "investsphere_prod"),
+            catalog=catalog(),
         )
 
 

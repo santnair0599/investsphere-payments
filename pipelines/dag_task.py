@@ -71,9 +71,13 @@ def task_init_run(params):
 
 
 def task_bronze(params, source):
-    # File feed + customer CDC are IMPLEMENTED with real Spark; the remaining
-    # sources are reference stubs (implement them the same way — see
-    # docs/AZURE_IMPLEMENTATION.md).
+    # All six source patterns are IMPLEMENTED with real Spark.
+    # Two Auto Loader lanes: campaigns feed the enterprise entertainment domain;
+    # payments feeds the retained payments reference star (see docs/ENTERPRISE_PIVOT.md).
+    if source == "bronze_campaign_file":
+        from payments_platform.databricks.bronze_campaign_autoloader import run
+        run(catalog=params["catalog"], run_id=params["run_id"])
+        return
     if source == "bronze_payments_file":
         from payments_platform.databricks.bronze_payments_autoloader import run
         run(catalog=params["catalog"], run_id=params["run_id"])
@@ -195,8 +199,9 @@ def main():
     task = params["task"]
     if task == "init_run":
         task_init_run(params)
-    elif task in ("bronze_payments_file", "bronze_jdbc", "bronze_customer_cdc",
-                  "bronze_rest_api", "bronze_sftp", "bronze_salesforce"):
+    elif task in ("bronze_campaign_file", "bronze_payments_file", "bronze_jdbc",
+                  "bronze_customer_cdc", "bronze_rest_api", "bronze_sftp",
+                  "bronze_salesforce"):
         task_bronze(params, task)
     elif task == "bronze_validation_gate":
         task_bronze_validation_gate(params)

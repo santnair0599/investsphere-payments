@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 
@@ -187,9 +188,18 @@ def _simulator_cases():
              "expected": "refuse", "defense": "input_guard"} for o in outputs]
 
 
+def _simulator_flag() -> bool:
+    return os.environ.get("REDTEAM_SIMULATOR_ENABLED", "").strip().lower() in {
+        "1", "true", "yes", "on"}
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--simulator", action="store_true")
+    ap.add_argument("--simulator", action="store_true",
+                    help="also run the Azure adversarial simulator "
+                         "(or set REDTEAM_SIMULATOR_ENABLED=true)")
     a = ap.parse_args()
-    res = run(use_simulator=a.simulator)
+    # REDTEAM_SIMULATOR_ENABLED was documented in .env.example but read nowhere, so the
+    # flag did nothing; the simulator was reachable only via --simulator. Honor both.
+    res = run(use_simulator=a.simulator or _simulator_flag())
     raise SystemExit(1 if (res["breaches"] or res["unverified"]) else 0)

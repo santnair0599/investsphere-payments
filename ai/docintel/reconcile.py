@@ -23,6 +23,8 @@ from dataclasses import dataclass, asdict
 from decimal import Decimal
 from pathlib import Path
 
+from ai.tools.databricks_client import catalog as _catalog
+
 SAMPLES = Path(__file__).parent / "samples"
 AMOUNT_TOLERANCE = Decimal("0.01")
 
@@ -73,7 +75,7 @@ def ledger_lookup(payment_ids: list[str]) -> dict[str, dict]:
         ids = ",".join(f"'{p}'" for p in payment_ids)
         rows = query_gold(
             f"SELECT payment_id, amount, currency_code, transaction_date "
-            f"FROM {os.getenv('DATABRICKS_CATALOG','investsphere_dev')}.gold.fact_payments "
+            f"FROM {_catalog()}.gold.fact_payments "
             f"WHERE payment_id IN ({ids})")
         return {r["payment_id"]: r for r in rows}
     except Exception:

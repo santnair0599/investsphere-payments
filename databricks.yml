@@ -140,6 +140,23 @@ resources:
                          "--load_mode", "{{job.parameters.load_mode}}"]
 
         # ---- Bronze (parallel) ----
+        # Auto Loader lane for the enterprise domain: marketing campaign exports.
+        # silver_entertainment conforms bronze.campaign_file -> campaign_roi_clean,
+        # which dbt builds into gold_entertainment.fact_campaign_roi.
+        - task_key: bronze_campaign_file
+          environment_key: default
+          depends_on: [{ task_key: init_run }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "bronze_campaign_file",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}",
+                         "--load_mode", "{{job.parameters.load_mode}}"]
+
+        # Auto Loader lane for the retained payments reference star (fact_payments,
+        # dim_customer[_history]) — also what ai/docintel reconciles OCR against.
+        # See docs/ENTERPRISE_PIVOT.md.
         - task_key: bronze_payments_file
           environment_key: default
           depends_on: [{ task_key: init_run }]
@@ -216,6 +233,7 @@ resources:
         - task_key: bronze_validation_gate
           environment_key: default
           depends_on:
+            - { task_key: bronze_campaign_file }
             - { task_key: bronze_payments_file }
             - { task_key: bronze_jdbc }
             - { task_key: bronze_customer_cdc }
@@ -242,6 +260,18 @@ resources:
           spark_python_task:
             python_file: ./pipelines/dag_task.py
             parameters: ["--task", "silver_customer_scd2",
+                         "--run_id", "{{job.parameters.run_id}}",
+                         "--catalog", "{{job.parameters.catalog}}"]
+        # Conforms bronze.payments_file -> silver_clean.payment_clean, which dbt builds
+        # into the retained payments star (fact_payments). Without it dbt_build reads a
+        # source no task in this job produces.
+        - task_key: silver_payments
+          environment_key: default
+          depends_on: [{ task_key: bronze_gate_check, outcome: "true" }]
+          <<: *retry
+          spark_python_task:
+            python_file: ./pipelines/dag_task.py
+            parameters: ["--task", "silver_payments",
                          "--run_id", "{{job.parameters.run_id}}",
                          "--catalog", "{{job.parameters.catalog}}"]
         - task_key: silver_realestate
@@ -295,6 +325,7 @@ resources:
           environment_key: default
           depends_on:
             - { task_key: silver_customer_scd2 }
+            - { task_key: silver_payments }
             - { task_key: silver_realestate }
             - { task_key: silver_hospitality }
             - { task_key: silver_entertainment }

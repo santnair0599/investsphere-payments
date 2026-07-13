@@ -23,8 +23,11 @@ from payments_platform.databricks import (
 # audit columns every Bronze table must carry
 REQUIRED_AUDIT = ["source_system", "run_id", "ingestion_timestamp", "record_hash"]
 
+# Blocking sources: a Silver conformer reads each of these, so an empty one must stop
+# promotion rather than quietly build an empty mart. The optional feeds (rest_api, sftp,
+# salesforce) are monitored but non-blocking — add them here to make them blocking.
 BRONZE_POLICY = {**DEFAULT_BRONZE_POLICY,
-                 "required_sources": ["payments_file", "customer_cdc"],   # always seeded
+                 "required_sources": ["campaign_file", "payments_file", "customer_cdc"],
                  "max_corrupt_files": 0}
 SILVER_POLICY = {**DEFAULT_SILVER_POLICY}
 
